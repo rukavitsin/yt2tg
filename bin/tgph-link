@@ -1,0 +1,106 @@
+#!/usr/bin/env perl
+use v5.36;
+use strict;
+use warnings;
+use FindBin qw($Bin);
+use lib "$Bin/lib";
+use Tgph::CLI;
+use Tgph::ExitCodes;
+use Tgph::IO;
+use Tgph::JSON;
+use Tgph::Normalize;
+use Tgph::Link;
+
+sub usage {
+    print <<"HELP";
+Usage: tgph-link [OPTIONS] [FILE]
+
+Options:
+  -h, --help       Show this help
+  -V, --version    Show version
+  -n, --dry-run    Do not perform changes
+HELP
+    return Tgph::ExitCodes::OK;
+}
+
+my @argv = @ARGV;
+my ($options, $exit) = Tgph::CLI::parse(\@argv);
+exit $exit unless $exit == Tgph::ExitCodes::OK;
+
+if ($options->{help}) {
+    exit usage();
+}
+
+if ($options->{version}) {
+    exit Tgph::CLI::print_version();
+}
+
+exit Tgph::ExitCodes::USAGE if @argv > 1;
+
+my $bytes;
+
+if (@argv) {
+    my $file = $argv[0];
+
+    open my $fh, '<:raw', $file
+        or do {
+            warn "tgph-link: cannot open '$file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+
+    eval {
+        $bytes = Tgph::IO::read_bytes($fh);
+        1;
+    } or do {
+        warn "tgph-link: $@";
+        close $fh;
+        exit Tgph::ExitCodes::INPUT;
+    };
+
+    close $fh
+        or do {
+            warn "tgph-link: cannot close '$file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+}
+else {
+    eval {
+        $bytes = Tgph::IO::read_bytes(\*STDIN);
+        1;
+    } or do {
+        warn "tgph-link: $@";
+        exit Tgph::ExitCodes::INPUT;
+    };
+}
+
+my $pages = eval { Tgph::JSON::decode_bytes($bytes) };
+
+if ($@) {
+    warn "tgph-link: invalid JSON\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+unless (ref($pages) eq 'ARRAY') {
+    warn "tgph-link: input must be a JSON array of pages\n";
+    exit Tgph::ExitCodes::VALIDATION;
+}
+
+for my $i (0 .. $#$pages) {
+    my $page = $pages->[$i];
+    unless (ref($page) eq 'ARRAY') {
+        warn "tgph-link: page $i must be a JSON array of nodes\n";
+        exit Tgph::ExitCodes::VALIDATION;
+    }
+
+    if (my $error = Tgph::Normalize::structural_error($page)) {
+        warn "tgph-link: page $i: $error\n";
+        exit Tgph::ExitCodes::VALIDATION;
+    }
+}
+
+my $linked = Tgph::Link::add_navigation($pages);
+
+binmode STDOUT;
+print Tgph::JSON::encode($linked);
+
+exit Tgph::ExitCodes::OK;

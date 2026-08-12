@@ -1,0 +1,69 @@
+# 07 Lessons Learned (bug register)
+
+Format: id / symptom / root cause / fix / prevention.
+
+OPT-TT
+    Getopt "Duplicate specification for option t".
+    Short aliases t and T collide (case-insensitive shorts).
+    Removed the T alias.
+    Standard: no case-twin short options (05).
+
+UTF8-TEST
+    like() fails on UTF-8 output; Wide character warnings.
+    Comparing UTF-8 bytes against character regexes.
+    decode('UTF-8', ...) before like().
+    Standard: 06 testing rules.
+
+FENCES
+    Message and saved file corrupted into garbage.
+    Triple backticks inside a fenced block close the outer fence.
+    Restored README; banned nested fences.
+    Standard: 4-space indented code in docs; never ``` inside blocks.
+
+NODIR
+    "cannot create ...: Directory nonexistent".
+    cat into a path whose directory does not exist.
+    mkdir -p before first write.
+    Standard: 05 shell rules.
+
+DEPS
+    "Can't locate YAML/PP.pm".
+    Proposed a CPAN module against the core-only rule.
+    Wrote a dependency-free front matter parser.
+    Standard: core modules only (05).
+
+FM-BLANK
+    Body kept a leading blank line after front matter.
+    Regex consumed only one newline after the closing ---.
+    Strip leading newlines from body.
+    Regression: Tgph-FrontMatter.t.
+
+PUB-ENC
+    Garbage Cyrillic in published URLs; empty page content.
+    encode_utf8() then HTTP::Tiny post_form double-encoded fields.
+    Pass characters to post_form; drop manual encoding.
+    Standard: UTF-8 contract (03, 05).
+
+TRANSLIT-DEAD
+    transliterate() returned input unchanged; API slug already clean.
+    Telegra.ph transliterates titles itself; helper was dead code.
+    Deleted the helper.
+    Rule: verify who owns a transformation before implementing it.
+
+XCLIP-STDERR
+    Part of block output stayed in the terminal, not the clipboard.
+    stderr not redirected when piping to xclip.
+    exec 2>&1 as first statement of every block.
+    Standard: block format (05).
+
+EX-H1
+    examples/article.json failed tgph-validate.
+    Examples contained h1/h2, invalid Telegraph tags.
+    Rewrote examples with h3/p only.
+    Rule: examples must pass the project's own validator.
+
+JOIN-REF
+    Test got HASH(0x...) instead of text.
+    join '' over page elements that are hash nodes after split v2.
+    Node-aware joiner in tests.
+    Standard: 06 testing rules.

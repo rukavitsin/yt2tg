@@ -1,0 +1,295 @@
+#!/usr/bin/env perl
+use v5.36;
+use strict;
+use warnings;
+use FindBin qw($Bin);
+use lib "$Bin/lib";
+use Encode qw(decode FB_CROAK);
+use Tgph::CLI;
+use Tgph::ExitCodes;
+use Tgph::IO;
+use Tgph::JSON;
+use Tgph::Publish;
+use Tgph::Validate;
+
+sub usage {
+    print <<"HELP";
+Usage: tgph-publish [OPTIONS] [FILE]
+
+Options:
+  -h, --help                Show this help
+  -V, --version             Show version
+  -n, --dry-run             Print prepared API requests instead of publishing
+  -t, --title TEXT          Page title (required unless --title-file)
+  -T, --title-file FILE     Read page title from FILE
+  -a, --author-name TEXT    Author name
+  -u, --author-url URL      Author URL
+      --access-token TOKEN  Telegraph access token (or TGPH_ACCESS_TOKEN)
+      --api-url URL         API base URL (default: https://api.telegra.ph)
+      --timeout SECONDS     HTTP timeout in seconds (default: 30)
+  -j, --json                Output full API results as JSON
+HELP
+    return Tgph::ExitCodes::OK;
+}
+
+sub decode_arg {
+    my ($value, $name) = @_;
+
+    my $decoded = eval { decode('UTF-8', $value, FB_CROAK) };
+
+    if ($@) {
+        warn "tgph-publish: invalid UTF-8 in $name\n";
+        exit Tgph::ExitCodes::USAGE;
+    }
+
+    return $decoded;
+}
+
+sub read_title_file {
+    my ($file) = @_;
+
+    open my $fh, '<:raw', $file
+        or do {
+            warn "tgph-publish: cannot open title file '$file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+
+    my $bytes = eval { Tgph::IO::read_bytes($fh) };
+
+    if ($@) {
+        warn "tgph-publish: $@";
+        close $fh;
+        exit Tgph::ExitCodes::INPUT;
+    }
+
+    close $fh
+        or do {
+            warn "tgph-publish: cannot close title file '$file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+
+    my $text = eval { decode('UTF-8', $bytes, FB_CROAK) };
+
+    if ($@) {
+        warn "tgph-publish: title file '$file' is not valid UTF-8\n";
+        exit Tgph::ExitCodes::INPUT;
+    }
+
+    $text =~ s/[\r\n]+\z//;
+
+    return $text;
+}
+
+my @argv = @ARGV;
+
+my ($title, $title_file, $author_name, $author_url, $access_token, $api_url, $timeout, $json_mode);
+
+my ($options, $exit) = Tgph::CLI::parse(
+    \@argv,
+    spec => [
+        'title|t=s'       => \$title,
+        'title-file=s'  => \$title_file,
+        'author-name|a=s' => \$author_name,
+        'author-url|u=s'  => \$author_url,
+        'access-token=s'  => \$access_token,
+        'api-url=s'       => \$api_url,
+        'timeout=i'       => \$timeout,
+        'json|j'          => \$json_mode,
+    ],
+);
+
+exit $exit unless $exit == Tgph::ExitCodes::OK;
+
+if ($options->{help}) {
+    exit usage();
+}
+
+if ($options->{version}) {
+    exit Tgph::CLI::print_version();
+}
+
+if (defined $title && defined $title_file) {
+    warn "tgph-publish: use only one of --title or --title-file\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+
+exit Tgph::ExitCodes::USAGE if @argv > 1;
+
+if (defined $api_url) {
+    $api_url =~ s{/+\z}{};
+
+    if (!length $api_url) {
+        warn "tgph-publish: --api-url must not be empty\n";
+        exit Tgph::ExitCodes::USAGE;
+    }
+}
+else {
+    $api_url = 'https://api.telegra.ph';
+}
+
+if (defined $timeout && $timeout <= 0) {
+    warn "tgph-publish: --timeout must be a positive integer\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+
+$timeout //= 30;
+
+if (defined $title) {
+    $title = decode_arg($title, '--title');
+}
+
+if (defined $title_file) {
+    $title = read_title_file($title_file);
+}
+
+if (defined $author_name) {
+    $author_name = decode_arg($author_name, '--author-name');
+}
+
+if (defined $author_url) {
+    $author_url = decode_arg($author_url, '--author-url');
+}
+
+if (!defined $access_token
+    && defined $ENV{TGPH_ACCESS_TOKEN}
+    && length $ENV{TGPH_ACCESS_TOKEN}) {
+    $access_token = $ENV{TGPH_ACCESS_TOKEN};
+}
+
+my $bytes;
+
+if (@argv) {
+    my $file = $argv[0];
+
+    open my $fh, '<:raw', $file
+        or do {
+            warn "tgph-publish: cannot open '$file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+
+    eval {
+        $bytes = Tgph::IO::read_bytes($fh);
+        1;
+    } or do {
+        warn "tgph-publish: $@";
+        close $fh;
+        exit Tgph::ExitCodes::INPUT;
+    };
+
+    close $fh
+        or do {
+            warn "tgph-publish: cannot close '$file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+}
+else {
+    eval {
+        $bytes = Tgph::IO::read_bytes(\*STDIN);
+        1;
+    } or do {
+        warn "tgph-publish: $@";
+        exit Tgph::ExitCodes::INPUT;
+    };
+}
+
+my $data = eval { Tgph::JSON::decode_bytes($bytes) };
+
+if ($@) {
+    warn "tgph-publish: invalid JSON\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+unless (ref($data) eq 'ARRAY') {
+    warn "tgph-publish: input must be a JSON array\n";
+    exit Tgph::ExitCodes::VALIDATION;
+}
+
+my $pages = eval { Tgph::Publish::extract_pages($data) };
+
+if ($@) {
+    warn "tgph-publish: $@";
+    exit Tgph::ExitCodes::VALIDATION;
+}
+
+for my $i (0 .. $#$pages) {
+    if (my $error = Tgph::Validate::error($pages->[$i])) {
+        my $page_number = $i + 1;
+        warn "tgph-publish: page $page_number: $error\n";
+        exit Tgph::ExitCodes::VALIDATION;
+    }
+}
+
+if (!@$pages) {
+    if ($options->{dry_run} || $json_mode) {
+        binmode STDOUT;
+        print Tgph::JSON::encode([]);
+    }
+
+    exit Tgph::ExitCodes::OK;
+}
+
+if (!defined $title || !length $title) {
+    warn "tgph-publish: --title or --title-file with non-empty title is required\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+
+my $requests = eval {
+    Tgph::Publish::prepare_requests(
+        $pages,
+        title        => $title,
+        author_name  => $author_name,
+        author_url   => $author_url,
+        access_token => $access_token,
+    );
+};
+
+if ($@) {
+    warn "tgph-publish: $@";
+    exit Tgph::ExitCodes::INTERNAL;
+}
+
+if ($options->{dry_run}) {
+    my $sanitized = Tgph::Publish::sanitize_requests($requests);
+
+    binmode STDOUT;
+    print Tgph::JSON::encode($sanitized);
+
+    exit Tgph::ExitCodes::OK;
+}
+
+my $results = eval {
+    Tgph::Publish::send_requests(
+        $requests,
+        api_url => $api_url,
+        timeout => $timeout,
+    );
+};
+
+if ($@) {
+    my $message = $@;
+
+    warn "tgph-publish: $message";
+
+    if ($message =~ /CONTENT_TOO_BIG/) {
+        exit Tgph::ExitCodes::VALIDATION;
+    }
+
+    exit Tgph::ExitCodes::API;
+}
+
+binmode STDOUT;
+
+if ($json_mode) {
+    print Tgph::JSON::encode($results);
+}
+else {
+    for my $result (@$results) {
+        if (ref($result) eq 'HASH'
+            && defined $result->{url}
+            && !ref($result->{url})) {
+            print "$result->{url}\n";
+        }
+    }
+}
+
+exit Tgph::ExitCodes::OK;

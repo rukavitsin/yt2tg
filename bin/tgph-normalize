@@ -1,0 +1,132 @@
+#!/usr/bin/env perl
+use v5.36;
+use strict;
+use warnings;
+use FindBin qw($Bin);
+use lib "$Bin/lib";
+use Encode qw(encode_utf8);
+use Tgph::CLI;
+use Tgph::ExitCodes;
+use Tgph::IO;
+use Tgph::JSON;
+use Tgph::Normalize;
+
+sub usage {
+    print <<"HELP";
+Usage: tgph-normalize [OPTIONS] [FILE]
+
+Options:
+  -h, --help            Show this help
+  -V, --version         Show version
+  -n, --dry-run         Do not perform changes
+      --title-out FILE  Write extracted first h1 title to FILE
+HELP
+    return Tgph::ExitCodes::OK;
+}
+
+my @argv = @ARGV;
+my $title_out;
+
+my ($options, $exit) = Tgph::CLI::parse(
+    \@argv,
+    spec => [
+        'title-out=s' => \$title_out,
+    ],
+);
+
+exit $exit unless $exit == Tgph::ExitCodes::OK;
+
+if ($options->{help}) {
+    exit usage();
+}
+
+if ($options->{version}) {
+    exit Tgph::CLI::print_version();
+}
+
+if (defined $title_out && !length $title_out) {
+    warn "tgph-normalize: --title-out requires a file name\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+
+exit Tgph::ExitCodes::USAGE if @argv > 1;
+
+my $bytes;
+
+if (@argv) {
+    my $file = $argv[0];
+
+    open my $fh, '<:raw', $file
+        or do {
+            warn "tgph-normalize: cannot open '$file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+
+    eval {
+        $bytes = Tgph::IO::read_bytes($fh);
+        1;
+    } or do {
+        warn "tgph-normalize: $@";
+        close $fh;
+        exit Tgph::ExitCodes::INPUT;
+    };
+
+    close $fh
+        or do {
+            warn "tgph-normalize: cannot close '$file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+}
+else {
+    eval {
+        $bytes = Tgph::IO::read_bytes(\*STDIN);
+        1;
+    } or do {
+        warn "tgph-normalize: $@";
+        exit Tgph::ExitCodes::INPUT;
+    };
+}
+
+my $nodes = eval { Tgph::JSON::decode_bytes($bytes) };
+
+if ($@) {
+    warn "tgph-normalize: invalid JSON\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+if (my $error = Tgph::Normalize::structural_error($nodes)) {
+    warn "tgph-normalize: $error\n";
+    exit Tgph::ExitCodes::VALIDATION;
+}
+
+my ($normalized, $title) = Tgph::Normalize::normalize(
+    $nodes,
+    extract_title => defined($title_out) ? 1 : 0,
+);
+
+if (defined $title_out && !$options->{dry_run}) {
+    open my $out, '>:raw', $title_out
+        or do {
+            warn "tgph-normalize: cannot write title file '$title_out': $!\n";
+            exit Tgph::ExitCodes::OUTPUT;
+        };
+
+    my $ok = print {$out} encode_utf8($title // '');
+
+    if (!$ok) {
+        warn "tgph-normalize: cannot write title file '$title_out': $!\n";
+        close $out;
+        exit Tgph::ExitCodes::OUTPUT;
+    }
+
+    close $out
+        or do {
+            warn "tgph-normalize: cannot close title file '$title_out': $!\n";
+            exit Tgph::ExitCodes::OUTPUT;
+        };
+}
+
+binmode STDOUT;
+print Tgph::JSON::encode($normalized);
+
+exit Tgph::ExitCodes::OK;

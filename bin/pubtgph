@@ -1,0 +1,168 @@
+#!/bin/sh
+# pubtgph — full pipeline: markdown -> Telegra.ph
+# POSIX sh (dash). No bashisms. Minimal forks.
+
+set -eu
+
+PROG='pubtgph'
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+BIN_DIR=$SCRIPT_DIR
+
+DEFAULT_MAX_BYTES=24000
+EX_USAGE=1
+EX_INPUT=2
+
+die() {
+    printf '%s: %s\n' "$PROG" "$2" >&2
+    exit "$1"
+}
+
+version() {
+    exec perl -I"$BIN_DIR/lib" -MTgph::CLI \
+        -e 'exit Tgph::CLI::print_version()'
+}
+
+usage() {
+    cat <<EOF
+Usage: $PROG [OPTIONS] ARTICLE_MD
+
+Pipeline: md2content -> normalize -> optimize -> validate -> split -> link -> publish
+
+Title priority: front matter -> h1 -> --title -> file name.
+
+Options:
+  -h, --help                Show this help
+  -V, --version             Show version
+  -t, --title TEXT          Fallback title
+  -m, --max-bytes BYTES     Maximum page size (default: $DEFAULT_MAX_BYTES)
+  -a, --author-name TEXT    Author name
+  -u, --author-url URL      Author URL
+      --access-token TOKEN  Telegraph token (default: \$TP_TOKEN from ~/.tgrc)
+      --api-url URL         API base URL (default: \$TP_URL from ~/.tgrc)
+  -n, --dry-run             Print prepared API requests without publishing
+  -j, --json                Output full API results as JSON
+EOF
+    exit 0
+}
+
+title=''
+max_bytes=$DEFAULT_MAX_BYTES
+author_name=''
+author_url=''
+access_token=''
+api_url=''
+dry_run=''
+json_out=''
+md_file=''
+
+while [ $# -gt 0 ]; do
+    case $1 in
+        -h|--help)        usage ;;
+        -V|--version)     version ;;
+        -t|--title)       title=$2; shift 2 ;;
+        -m|--max-bytes)   max_bytes=$2; shift 2 ;;
+        -a|--author-name) author_name=$2; shift 2 ;;
+        -u|--author-url)  author_url=$2; shift 2 ;;
+        --access-token)   access_token=$2; shift 2 ;;
+        --api-url)        api_url=$2; shift 2 ;;
+        -n|--dry-run)     dry_run=1; shift ;;
+        -j|--json)        json_out=1; shift ;;
+        -*)               die "$EX_USAGE" "unknown option: $1" ;;
+        *)
+            if [ -n "$md_file" ]; then
+                die "$EX_USAGE" 'multiple input files not allowed'
+            fi
+            md_file=$1
+            shift
+            ;;
+    esac
+done
+
+if [ -z "$md_file" ]; then
+    die "$EX_USAGE" 'ARTICLE_MD file is required'
+fi
+
+if [ ! -f "$md_file" ]; then
+    die "$EX_INPUT" "cannot open '$md_file'"
+fi
+
+# ─── Config: ~/.tgrc (CLI overrides) ────────────────────────────────────────
+if [ -f "$HOME/.tgrc" ]; then
+    . "$HOME/.tgrc"
+fi
+
+access_token=${access_token:-${TP_TOKEN:-}}
+api_url=${api_url:-${TP_URL:-}}
+
+# ─── Temp workspace ─────────────────────────────────────────────────────────
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+
+content=$WORK/content.json
+normalized=$WORK/normalized.json
+optimized=$WORK/optimized.json
+pages=$WORK/pages.json
+linked=$WORK/linked.json
+fm_title=$WORK/fm_title.txt
+h1_title=$WORK/h1_title.txt
+fallback_title=$WORK/fallback_title.txt
+
+# ─── 1. md -> content.json (+ front matter title) ───────────────────────────
+"$BIN_DIR/tgph-md2content" --title-out "$fm_title" "$md_file" > "$content"
+
+# ─── 2. normalize + title resolution ────────────────────────────────────────
+if [ -s "$fm_title" ]; then
+    "$BIN_DIR/tgph-normalize" "$content" > "$normalized"
+    title_file=$fm_title
+else
+    "$BIN_DIR/tgph-normalize" --title-out "$h1_title" "$content" > "$normalized"
+
+    if [ -s "$h1_title" ]; then
+        title_file=$h1_title
+    elif [ -n "$title" ]; then
+        printf '%s' "$title" > "$fallback_title"
+        title_file=$fallback_title
+    else
+        name=${md_file##*/}
+        base=${name%.*}
+        printf '%s' "$base" > "$fallback_title"
+        title_file=$fallback_title
+    fi
+fi
+
+# ─── 3. optimize -> validate -> split -> link ───────────────────────────────
+"$BIN_DIR/tgph-optimize" "$normalized" > "$optimized"
+"$BIN_DIR/tgph-validate" "$optimized"
+"$BIN_DIR/tgph-split" --max-bytes "$max_bytes" "$optimized" > "$pages"
+"$BIN_DIR/tgph-link" "$pages" > "$linked"
+
+# ─── 4. publish ─────────────────────────────────────────────────────────────
+set --
+
+if [ -n "$author_name" ]; then
+    set -- "$@" --author-name "$author_name"
+fi
+
+if [ -n "$author_url" ]; then
+    set -- "$@" --author-url "$author_url"
+fi
+
+if [ -n "$access_token" ]; then
+    set -- "$@" --access-token "$access_token"
+fi
+
+if [ -n "$api_url" ]; then
+    set -- "$@" --api-url "$api_url"
+fi
+
+if [ -n "$dry_run" ]; then
+    set -- "$@" --dry-run
+fi
+
+if [ -n "$json_out" ]; then
+    set -- "$@" --json
+fi
+
+set -- "$@" --title-file "$title_file" "$linked"
+
+exec "$BIN_DIR/tgph-publish" "$@"

@@ -1,0 +1,58 @@
+#!/bin/sh
+# yt2tg - YouTube to Telegram/Telegraph pipeline orchestrator
+# POSIX sh (dash). No bashisms. Minimal forks.
+set -eu
+PROG='yt2tg'
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+BIN_DIR=$SCRIPT_DIR
+EX_USAGE=1
+
+die() {
+    printf '%s: %s
+' "$PROG" "$2" >&2
+    exit "$1"
+}
+
+usage() {
+    cat <<EOF_USAGE
+Usage: $PROG [OPTIONS] YOUTUBE_URL
+Pipeline: yt-dlp -> srt -> gemini -> pubtgph -> telegram
+Options:
+-h, --help                Show this help
+-V, --version             Show version
+-n, --dry-run             Do not perform changes
+EOF_USAGE
+    exit 0
+}
+
+url=''
+dry_run=''
+
+while [ $# -gt 0 ]; do
+    case $1 in
+        -h|--help)    usage ;;
+        -V|--version) perl -I"$BIN_DIR/lib" -MTgph::CLI -e 'exit Tgph::CLI::print_version()' ;;
+        -n|--dry-run) dry_run=1; shift ;;
+        -*)           die "$EX_USAGE" "unknown option: $1" ;;
+        *)
+            if [ -n "$url" ]; then
+                die "$EX_USAGE" 'multiple URLs not allowed'
+            fi
+            url=$1
+            shift
+            ;;
+    esac
+done
+
+if [ -z "$url" ]; then
+    die "$EX_USAGE" 'YOUTUBE_URL is required'
+fi
+
+mkdir -p srt
+mkdir -p md
+
+if [ -f "$HOME/.tgrc" ]; then
+    . "$HOME/.tgrc"
+fi
+
+echo "Starting pipeline for: $url"

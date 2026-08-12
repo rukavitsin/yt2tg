@@ -1,0 +1,152 @@
+#!/usr/bin/env perl
+
+use v5.36;
+use strict;
+use warnings;
+
+use FindBin qw($Bin);
+
+use lib "$Bin/lib";
+
+use JSON::PP ();
+use Tgph::CLI;
+use Tgph::ExitCodes;
+use Tgph::IO;
+use Tgph::JSON;
+use Tgph::Limit;
+use Tgph::Node;
+
+sub usage {
+    print <<"HELP";
+Usage: tgph-limit --max BYTES [OPTIONS] [FILE]
+
+Options:
+  -h, --help       Show this help
+  -V, --version    Show version
+  -n, --dry-run    Do not perform changes
+  -m, --max BYTES  Maximum allowed size in bytes
+      --json       Read Telegraph nodes as JSON
+HELP
+
+    return Tgph::ExitCodes::OK;
+}
+
+sub validate_nodes {
+    my ($nodes) = @_;
+
+    return 0 unless ref($nodes) eq 'ARRAY';
+
+    for my $node (@$nodes) {
+        if (!ref($node)) {
+            return 0 unless defined($node);
+            next;
+        }
+
+        return 0 unless ref($node) eq 'HASH';
+
+        my $tag = $node->{tag};
+        my $children = $node->{children};
+
+        return 0 unless defined($tag);
+        return 0 unless ref($children) eq 'ARRAY';
+
+        return 0 unless Tgph::Node::raw($node);
+    }
+
+    return 1;
+}
+
+my @argv = @ARGV;
+my $max;
+my $json_mode = 0;
+
+my ($options, $exit) = Tgph::CLI::parse(
+    \@argv,
+    spec => [
+        'max|m=i' => \$max,
+        'json'    => \$json_mode,
+    ],
+);
+
+exit $exit unless $exit == Tgph::ExitCodes::OK;
+
+if ($options->{help}) {
+    exit usage();
+}
+
+if ($options->{version}) {
+    exit Tgph::CLI::print_version();
+}
+
+if (!defined $max) {
+    warn "tgph-limit: --max is required\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+
+if ($json_mode) {
+    exit Tgph::ExitCodes::USAGE if @argv;
+
+    local $/;
+
+    my $input = <STDIN>;
+
+    my $nodes;
+
+    {
+        local $@;
+
+        eval {
+            $nodes = JSON::PP::decode_json($input // '');
+            1;
+        } or do {
+            warn "tgph-limit: invalid JSON input\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+    }
+
+    unless (validate_nodes($nodes)) {
+        warn "tgph-limit: invalid Telegraph nodes\n";
+        exit Tgph::ExitCodes::INPUT;
+    }
+
+    my $bytes = Tgph::JSON::bytes($nodes);
+
+    print "$bytes\n";
+
+    exit Tgph::ExitCodes::OK
+        if Tgph::Limit::fits($bytes, $max);
+
+    exit Tgph::ExitCodes::VALIDATION;
+}
+
+exit Tgph::ExitCodes::USAGE if @argv > 1;
+
+my $bytes;
+
+if (@argv) {
+    my $file = $argv[0];
+
+    open my $fh, '<:raw', $file
+        or do {
+            warn "tgph-limit: cannot open '$file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+
+    $bytes = Tgph::IO::byte_count($fh);
+
+    close $fh
+        or do {
+            warn "tgph-limit: cannot close '$file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+}
+else {
+    $bytes = Tgph::IO::byte_count(\*STDIN);
+}
+
+print "$bytes\n";
+
+exit Tgph::ExitCodes::OK
+    if Tgph::Limit::fits($bytes, $max);
+
+exit Tgph::ExitCodes::VALIDATION;

@@ -1,0 +1,152 @@
+#!/usr/bin/env perl
+use v5.36;
+use strict;
+use warnings;
+use FindBin qw($Bin);
+use lib "$Bin/lib";
+use Tgph::CLI;
+use Tgph::ExitCodes;
+use Tgph::IO;
+use Tgph::JSON;
+use Tgph::Normalize;
+use Tgph::Split;
+
+sub usage {
+    print <<"HELP";
+Usage: tgph-split --max-bytes BYTES [OPTIONS] [FILE]
+
+Options:
+  -h, --help             Show this help
+  -V, --version          Show version
+  -n, --dry-run          Do not perform changes
+  -m, --max-bytes BYTES  Maximum page size in bytes (required)
+  -o, --output-dir DIR   Write pages to DIR instead of stdout
+HELP
+    return Tgph::ExitCodes::OK;
+}
+
+my @argv = @ARGV;
+my $max_bytes;
+my $output_dir;
+
+my ($options, $exit) = Tgph::CLI::parse(
+    \@argv,
+    spec => [
+        'max-bytes|m=i'   => \$max_bytes,
+        'output-dir|o=s'  => \$output_dir,
+    ],
+);
+
+exit $exit unless $exit == Tgph::ExitCodes::OK;
+
+if ($options->{help}) {
+    exit usage();
+}
+
+if ($options->{version}) {
+    exit Tgph::CLI::print_version();
+}
+
+if (!defined $max_bytes || $max_bytes <= 0) {
+    warn "tgph-split: --max-bytes must be a positive integer\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+
+exit Tgph::ExitCodes::USAGE if @argv > 1;
+
+my $bytes;
+
+if (@argv) {
+    my $file = $argv[0];
+
+    open my $fh, '<:raw', $file
+        or do {
+            warn "tgph-split: cannot open '$file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+
+    eval {
+        $bytes = Tgph::IO::read_bytes($fh);
+        1;
+    } or do {
+        warn "tgph-split: $@";
+        close $fh;
+        exit Tgph::ExitCodes::INPUT;
+    };
+
+    close $fh
+        or do {
+            warn "tgph-split: cannot close '$file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+}
+else {
+    eval {
+        $bytes = Tgph::IO::read_bytes(\*STDIN);
+        1;
+    } or do {
+        warn "tgph-split: $@";
+        exit Tgph::ExitCodes::INPUT;
+    };
+}
+
+my $nodes = eval { Tgph::JSON::decode_bytes($bytes) };
+
+if ($@) {
+    warn "tgph-split: invalid JSON\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+if (my $error = Tgph::Normalize::structural_error($nodes)) {
+    warn "tgph-split: $error\n";
+    exit Tgph::ExitCodes::VALIDATION;
+}
+
+my $pages = Tgph::Split::split_pages($nodes, max_bytes => $max_bytes);
+my $oversized = Tgph::Split::oversized_pages($pages, max_bytes => $max_bytes);
+
+if (defined $output_dir) {
+    unless (-d $output_dir) {
+        mkdir $output_dir
+            or do {
+                warn "tgph-split: cannot create output dir '$output_dir': $!\n";
+                exit Tgph::ExitCodes::OUTPUT;
+            };
+    }
+
+    for my $i (0 .. $#$pages) {
+        my $page_num = $i + 1;
+        my $filename = sprintf('%s/page%03d.json', $output_dir, $page_num);
+        my $json = Tgph::JSON::encode($pages->[$i]);
+
+        open my $fh, '>:raw', $filename
+            or do {
+                warn "tgph-split: cannot write '$filename': $!\n";
+                exit Tgph::ExitCodes::OUTPUT;
+            };
+
+        print {$fh} $json;
+
+        close $fh
+            or do {
+                warn "tgph-split: cannot close '$filename': $!\n";
+                exit Tgph::ExitCodes::OUTPUT;
+            };
+    }
+
+    my $total = scalar @$pages;
+    print "$total\n";
+}
+else {
+    binmode STDOUT;
+    my $output_json = Tgph::JSON::encode($pages);
+    print $output_json;
+}
+
+if (@$oversized) {
+    my $count = scalar @$oversized;
+    warn "tgph-split: $count page(s) exceed --max-bytes $max_bytes\n";
+    exit Tgph::ExitCodes::VALIDATION;
+}
+
+exit Tgph::ExitCodes::OK;

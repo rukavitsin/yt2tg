@@ -1,0 +1,93 @@
+#!/usr/bin/env perl
+use v5.36;
+use strict;
+use warnings;
+use FindBin qw($Bin);
+use lib "$Bin/lib";
+use Tgph::CLI;
+use Tgph::ExitCodes;
+use Tgph::IO;
+use Tgph::JSON;
+use Tgph::Normalize;
+use Tgph::Optimize;
+
+sub usage {
+    print <<"HELP";
+Usage: tgph-optimize [OPTIONS] [FILE]
+
+Options:
+  -h, --help       Show this help
+  -V, --version    Show version
+  -n, --dry-run    Do not perform changes
+HELP
+    return Tgph::ExitCodes::OK;
+}
+
+my @argv = @ARGV;
+my ($options, $exit) = Tgph::CLI::parse(\@argv);
+exit $exit unless $exit == Tgph::ExitCodes::OK;
+
+if ($options->{help}) {
+    exit usage();
+}
+
+if ($options->{version}) {
+    exit Tgph::CLI::print_version();
+}
+
+exit Tgph::ExitCodes::USAGE if @argv > 1;
+
+my $bytes;
+
+if (@argv) {
+    my $file = $argv[0];
+
+    open my $fh, '<:raw', $file
+        or do {
+            warn "tgph-optimize: cannot open '$file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+
+    eval {
+        $bytes = Tgph::IO::read_bytes($fh);
+        1;
+    } or do {
+        warn "tgph-optimize: $@";
+        close $fh;
+        exit Tgph::ExitCodes::INPUT;
+    };
+
+    close $fh
+        or do {
+            warn "tgph-optimize: cannot close '$file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+}
+else {
+    eval {
+        $bytes = Tgph::IO::read_bytes(\*STDIN);
+        1;
+    } or do {
+        warn "tgph-optimize: $@";
+        exit Tgph::ExitCodes::INPUT;
+    };
+}
+
+my $nodes = eval { Tgph::JSON::decode_bytes($bytes) };
+
+if ($@) {
+    warn "tgph-optimize: invalid JSON\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+if (my $error = Tgph::Normalize::structural_error($nodes)) {
+    warn "tgph-optimize: $error\n";
+    exit Tgph::ExitCodes::VALIDATION;
+}
+
+my $optimized = Tgph::Optimize::optimize($nodes);
+
+binmode STDOUT;
+print Tgph::JSON::encode($optimized);
+
+exit Tgph::ExitCodes::OK;
