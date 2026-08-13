@@ -1,0 +1,72 @@
+#!/usr/bin/env perl
+use v5.36;
+use strict;
+use warnings;
+use utf8;
+use FindBin qw($Bin);
+use lib "$Bin/lib";
+use JSON::PP ();
+use Tgph::CLI;
+use Tgph::ExitCodes;
+use Yt2tg::Metadata;
+
+my @argv = @ARGV;
+my ($options, $exit) = Tgph::CLI::parse(\@argv);
+exit $exit unless $exit == Tgph::ExitCodes::OK;
+
+if ($options->{help}) {
+    print <<"HELP";
+Usage: yt2tg-meta URL
+Extracts YouTube metadata (title, channel, date) via yt-dlp.
+Options:
+-h, --help       Show this help
+-V, --version    Show version
+HELP
+    exit Tgph::ExitCodes::OK;
+}
+if ($options->{version}) {
+    exit Tgph::CLI::print_version();
+}
+
+exit Tgph::ExitCodes::USAGE if @argv != 1;
+my $url = $argv[0];
+
+my $cmd = "yt-dlp -j --no-playlist " . quotemeta($url);
+my $output = `$cmd 2>/dev/null`;
+my $status = $? >> 8;
+
+if ($status != 0 || !$output) {
+    warn "yt2tg-meta: failed to fetch metadata from YouTube\n";
+    exit Tgph::ExitCodes::API;
+}
+
+my $data = eval { JSON::PP::decode_json($output) };
+if ($@ || ref($data) ne 'HASH') {
+    warn "yt2tg-meta: invalid JSON from yt-dlp\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+my $title = Yt2tg::Metadata::clean_text($data->{title} // '');
+my $channel = Yt2tg::Metadata::clean_text($data->{channel} // $data->{uploader} // '');
+my $timestamp = $data->{timestamp};
+my $date = Yt2tg::Metadata::format_time($timestamp);
+my $date_short = Yt2tg::Metadata::format_date_short($timestamp);
+my $video_id = $data->{id} // '';
+my $webpage_url = $data->{webpage_url} // $url;
+
+my $title_fn = Yt2tg::Metadata::clean_filename_part($title);
+my $channel_fn = Yt2tg::Metadata::clean_filename_part($channel);
+
+my $result = {
+    video_id => $video_id,
+    title => $title,
+    channel => $channel,
+    date => $date,
+    date_short => $date_short,
+    url => $webpage_url,
+    title_fn => $title_fn,
+    channel_fn => $channel_fn,
+};
+
+print JSON::PP->new->canonical->utf8->encode($result);
+exit Tgph::ExitCodes::OK;
