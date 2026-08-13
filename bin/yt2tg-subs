@@ -2,7 +2,6 @@
 use v5.36;
 use strict;
 use warnings;
-use utf8;
 use FindBin qw($Bin);
 use lib "$Bin/lib";
 use Tgph::CLI;
@@ -38,21 +37,28 @@ my $url = $argv[0];
 
 mkdir $output_dir unless -d $output_dir;
 
-my $cmd = "yt-dlp --write-auto-subs --write-subs --sub-langs 'original,en,ru,uk' --sub-format vtt --skip-download -o '$output_dir/%(id)s.%(ext)s' " . quotemeta($url);
-system($cmd);
-my $status = $? >> 8;
-if ($status != 0) {
-    warn "yt2tg-subs: failed to download subtitles\n";
-    exit Tgph::ExitCodes::API;
+my @langs = ('original', 'en', 'ru', 'uk');
+my $vtt_file;
+
+for my $lang (@langs) {
+    my $cmd = "yt-dlp --write-auto-subs --write-subs --sub-langs '$lang' --sub-format vtt --skip-download -o '$output_dir/%(id)s.%(ext)s' " . quotemeta($url);
+    my $output = `$cmd 2>&1`;
+    my $status = $? >> 8;
+
+    if ($status == 0) {
+        my @files = glob("$output_dir/*.vtt");
+        if (@files) {
+            $vtt_file = $files[0];
+            last;
+        }
+    }
 }
 
-my @files = glob("$output_dir/*.vtt");
-if (!@files) {
-    warn "yt2tg-subs: no subtitles found\n";
+if (!defined $vtt_file || !-f $vtt_file) {
+    warn "yt2tg-subs: no subtitles found for any language\n";
     exit Tgph::ExitCodes::INPUT;
 }
 
-my $vtt_file = $files[0];
 open my $fh, '<:encoding(UTF-8)', $vtt_file or do {
     warn "yt2tg-subs: cannot read '$vtt_file': $!\n";
     exit Tgph::ExitCodes::INPUT;
@@ -86,12 +92,16 @@ sub clean_vtt {
         next if $line =~ /^\d+$/;
         next if $line =~ /-->/;
         next if $line =~ /^\s*$/;
+
         $line =~ s/<[^>]+>//g;
         $line =~ s/\{[^}]+\}//g;
         $line =~ s/\[[^\]]+\]//g;
         $line =~ s/^\s+|\s+$//g;
+
         next if $line eq '';
+
         next if $seen{$line}++;
+
         push @result, $line;
     }
     return join("\n", @result);
