@@ -20,7 +20,7 @@ sub run_command {
     my ($status, $output) = run_command("sh '$script' --help");
     is($status, 0, '--help exits OK');
     like($output, qr/Usage: yt2tg/, '--help shows usage');
-    like($output, qr/YOUTUBE_URL/, 'usage mentions YOUTUBE_URL');
+    like($output, qr/--force/, '--help mentions --force');
 }
 
 {
@@ -42,23 +42,17 @@ sub run_command {
 }
 
 {
-    my $tmpdir = tempdir(CLEANUP => 1);
-    my ($status, $output) = run_command(
-        "cd '$tmpdir' && sh '$script' https://youtu.be/test");
-    is($status, 2, 'missing prompt.md exits INPUT');
-    like($output, qr/cannot open prompt file/, 'reports missing prompt');
+    my ($status, $output) = run_command("sh '$script' https://example.com/video");
+    is($status, 1, 'invalid URL exits USAGE');
+    like($output, qr/invalid YouTube URL/, 'reports invalid URL');
 }
 
 {
     my $tmpdir = tempdir(CLEANUP => 1);
-    my $prompt = "$tmpdir/prompt.md";
-    open my $fh, '>:raw', $prompt or die;
-    print {$fh} encode_utf8("Test prompt\n");
-    close $fh;
     my ($status, $output) = run_command(
-        "cd '$tmpdir' && sh '$script' --prompt '$prompt' " .
-        "https://youtu.be/test");
-    ok($status != 0, 'nonexistent URL does not succeed');
+        "cd '$tmpdir' && sh '$script' https://youtu.be/test");
+    is($status, 2, 'missing prompt.md exits INPUT');
+    like($output, qr/prompt file .* is empty or missing/, 'reports missing prompt');
 }
 
 done_testing;
