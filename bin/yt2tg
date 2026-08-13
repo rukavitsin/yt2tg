@@ -39,11 +39,13 @@ Options:
 -h, --help            Show this help
 -V, --version         Show version
 -p, --prompt FILE     Prompt file (default: prompt.md)
+-f, --force           Force republish even if video is in journal
 EOF_USAGE
     exit 0
 }
 
 prompt_file='prompt.md'
+force=''
 url=''
 
 while [ $# -gt 0 ]; do
@@ -51,6 +53,7 @@ while [ $# -gt 0 ]; do
         -h|--help) usage ;;
         -V|--version) version ;;
         -p|--prompt) prompt_file=$2; shift 2 ;;
+        -f|--force) force=1; shift ;;
         -*) die "$EX_USAGE" "unknown option: $1" ;;
         *)
             if [ -n "$url" ]; then
@@ -66,12 +69,28 @@ if [ -z "$url" ]; then
     die "$EX_USAGE" 'YOUTUBE_URL is required'
 fi
 
-if [ ! -f "$prompt_file" ]; then
-    die "$EX_INPUT" "cannot open prompt file '$prompt_file'"
-fi
+# --- Pre-checks (user input first, then environment) ---
+# P6: URL validation
+case "$url" in
+    http://www.youtube.com/*|https://www.youtube.com/*|http://youtube.com/*|https://youtube.com/*|http://youtu.be/*|https://youtu.be/*|http://m.youtube.com/*|https://m.youtube.com/*) ;;
+    *) die "$EX_USAGE" 'invalid YouTube URL' ;;
+esac
+# P5: prompt file
+[ -s "$prompt_file" ] || die "$EX_INPUT" "prompt file '$prompt_file' is empty or missing"
+# P1: yt-dlp
+command -v yt-dlp >/dev/null 2>&1 || die "$EX_USAGE" 'yt-dlp not found in PATH'
+# P2: cmark
+command -v cmark >/dev/null 2>&1 || die "$EX_USAGE" 'cmark not found in PATH'
+# P3/P4: config files
+[ -f "$HOME/.tgrc" ] || die "$EX_INPUT" '~/.tgrc not found'
+[ -f "$HOME/.geminirc" ] || die "$EX_INPUT" '~/.geminirc not found'
 
-# Create work directories
-mkdir -p srt md
+# --- XDG Data directories ---
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/pubtg"
+mkdir -p "$DATA_DIR/srt" "$DATA_DIR/md"
+SRT_DIR="$DATA_DIR/srt"
+MD_DIR="$DATA_DIR/md"
+JOURNAL="$BIN_DIR/publish_log.jsonl"
 
 # Temp workspace
 WORK=$(mktemp -d)
@@ -106,21 +125,34 @@ if [ -z "$video_id" ] || [ -z "$date_short" ] || \
     die "$EX_INPUT" 'failed to extract metadata fields'
 fi
 
-base_name="${date_short}--${video_id}--${channel_fn}--${title_fn}"
 info "ID: $video_id"
+
+# P7: Journal check
+if [ -z "$force" ]; then
+    if "$BIN_DIR/yt2tg-journal" check --journal "$JOURNAL" --video-id "$video_id" >/dev/null 2>&1; then
+        info "Already published. Use --force to republish."
+        exit 0
+    fi
+fi
+
+base_name="${date_short}--${video_id}--${channel_fn}--${title_fn}"
 
 # --- 2. Download subtitles ---
 step 2 'Downloading subtitles'
-transcript=$("$BIN_DIR/yt2tg-subs" --output-file-dir "$WORK" "$url")
+transcript=$("$BIN_DIR/yt2tg-subs" --output-dir "$WORK" "$url")
 if [ -z "$transcript" ] || [ ! -f "$transcript" ]; then
     die "$EX_INPUT" 'no subtitles found'
 fi
-cp "$transcript" "srt/${base_name}.txt"
-info "Saved: srt/${base_name}.txt"
+srt_file="${transcript%.txt}.srt"
+cp "$transcript" "$SRT_DIR/${base_name}.txt"
+if [ -f "$srt_file" ]; then
+    cp "$srt_file" "$SRT_DIR/${base_name}.srt"
+fi
+info "Saved: $SRT_DIR/${base_name}.txt"
 
 # --- 3. Send to Gemini ---
 step 3 'Sending to Gemini'
-response_md="md/${base_name}.md"
+response_md="$MD_DIR/${base_name}.md"
 "$BIN_DIR/yt2tg-gemini" \
     --prompt-file "$prompt_file" \
     --transcript-file "$transcript" \
