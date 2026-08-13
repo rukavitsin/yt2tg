@@ -1,0 +1,104 @@
+#!/usr/bin/env perl
+use v5.36;
+use strict;
+use warnings;
+use utf8;
+use FindBin qw($Bin);
+use lib "$Bin/lib";
+use Encode qw(decode encode FB_CROAK);
+use Tgph::CLI;
+use Tgph::ExitCodes;
+use Tgph::IO;
+use Yt2tg::Config;
+use Yt2tg::Gemini;
+
+sub read_utf8 {
+    my ($path) = @_;
+    open my $fh, '<:raw', $path or return undef;
+    my $bytes = eval { Tgph::IO::read_bytes($fh) };
+    close $fh or return undef;
+    return undef if $@;
+    my $text = eval { decode('UTF-8', $bytes, FB_CROAK) };
+    return undef if $@;
+    return $text;
+}
+
+my @argv = @ARGV;
+my ($prompt_file, $transcript_file);
+my ($options, $exit) = Tgph::CLI::parse(
+    \@argv,
+    spec => [
+        'prompt-file|p=s'     => \$prompt_file,
+        'transcript-file|t=s' => \$transcript_file,
+    ],
+);
+exit $exit unless $exit == Tgph::ExitCodes::OK;
+
+if ($options->{help}) {
+    print <<'HELP';
+Usage: yt2tg-gemini --prompt-file FILE --transcript-file FILE
+Sends transcript with prompt to Gemini, prints markdown response.
+Options:
+-h, --help                 Show this help
+-V, --version              Show version
+-n, --dry-run              Print prepared request without sending
+-p, --prompt-file FILE     Prompt file (required)
+-t, --transcript-file FILE Transcript file (required)
+HELP
+    exit Tgph::ExitCodes::OK;
+}
+if ($options->{version}) {
+    exit Tgph::CLI::print_version();
+}
+
+if (!defined $prompt_file || !defined $transcript_file) {
+    warn "yt2tg-gemini: --prompt-file and --transcript-file are required\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+
+my $prompt = read_utf8($prompt_file);
+if (!defined $prompt || !length $prompt) {
+    warn "yt2tg-gemini: cannot read prompt file '$prompt_file'\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+my $transcript = read_utf8($transcript_file);
+if (!defined $transcript || !length $transcript) {
+    warn "yt2tg-gemini: cannot read transcript file '$transcript_file'\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+my $request = Yt2tg::Gemini::build_request(
+    prompt     => $prompt,
+    transcript => $transcript,
+);
+
+if ($options->{dry_run}) {
+    binmode STDOUT;
+    print Yt2tg::Gemini::encode_request($request);
+    exit Tgph::ExitCodes::OK;
+}
+
+my $config = Yt2tg::Config::load();
+my $url = $config->{url_gemini};
+if (!defined $url || !length $url) {
+    warn "yt2tg-gemini: URL_GEMINI not found in ~/.geminirc\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+my $api_key = $config->{gemini_api_key};
+
+my $markdown = eval {
+    Yt2tg::Gemini::send_request(
+        url     => $url,
+        api_key => $api_key,
+        request => $request,
+    );
+};
+if ($@) {
+    my $message = $@;
+    warn "yt2tg-gemini: $message";
+    exit Tgph::ExitCodes::API;
+}
+
+binmode STDOUT;
+print encode('UTF-8', $markdown);
+exit Tgph::ExitCodes::OK;
