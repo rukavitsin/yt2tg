@@ -20,7 +20,7 @@ exit $exit unless $exit == Tgph::ExitCodes::OK;
 if ($options->{help}) {
     print <<"HELP";
 Usage: yt2tg-subs [OPTIONS] URL
-Downloads and cleans YouTube subtitles via yt-dlp.
+Downloads YouTube subtitles as SRT, converts to single-line TXT.
 Options:
 -h, --help            Show this help
 -V, --version         Show version
@@ -38,57 +38,67 @@ my $url = $argv[0];
 mkdir $output_dir unless -d $output_dir;
 
 my @langs = ('original', 'en', 'ru', 'uk');
-my $vtt_file;
+my $srt_file;
 
 for my $lang (@langs) {
-    my $cmd = "yt-dlp --write-auto-subs --write-subs --sub-langs '$lang' --sub-format vtt --skip-download -o '$output_dir/%(id)s.%(ext)s' " . quotemeta($url);
+    my $cmd = "yt-dlp --write-auto-subs --write-subs --sub-langs '$lang' --convert-subs srt --skip-download -o '$output_dir/%(id)s.%(ext)s' " . quotemeta($url);
     my $output = `$cmd 2>&1`;
     my $status = $? >> 8;
 
     if ($status == 0) {
-        my @files = glob("$output_dir/*.vtt");
+        my @files = glob("$output_dir/*.srt");
         if (@files) {
-            $vtt_file = $files[0];
+            $srt_file = $files[0];
             last;
         }
     }
 }
 
-if (!defined $vtt_file || !-f $vtt_file) {
+if (!defined $srt_file || !-f $srt_file) {
     warn "yt2tg-subs: no subtitles found for any language\n";
     exit Tgph::ExitCodes::INPUT;
 }
 
-open my $fh, '<:encoding(UTF-8)', $vtt_file or do {
-    warn "yt2tg-subs: cannot read '$vtt_file': $!\n";
+open my $fh, '<:encoding(UTF-8)', $srt_file or do {
+    warn "yt2tg-subs: cannot read '$srt_file': $!\n";
     exit Tgph::ExitCodes::INPUT;
 };
 my $text = do { local $/; <$fh> };
 close $fh;
 
-my $cleaned = clean_vtt($text);
+my $cleaned = clean_srt($text);
 
-my $txt_file = $vtt_file;
-$txt_file =~ s/\.vtt$/.txt/;
+my $txt_file = $srt_file;
+$txt_file =~ s/\.srt$/.txt/;
 open my $out, '>:encoding(UTF-8)', $txt_file or do {
     warn "yt2tg-subs: cannot write '$txt_file': $!\n";
     exit Tgph::ExitCodes::OUTPUT;
 };
-print $out $cleaned;
+print $out $cleaned, "\n";
 close $out;
 
 print "$txt_file\n";
 exit Tgph::ExitCodes::OK;
 
-sub clean_vtt {
+sub decode_entities {
     my ($text) = @_;
+    $text =~ s/&nbsp;/ /g;
+    $text =~ s/&lt;/</g;
+    $text =~ s/&gt;/>/g;
+    $text =~ s/&quot;/"/g;
+    $text =~ s/&#x([0-9a-fA-F]+);/chr(hex($1))/ge;
+    $text =~ s/&#([0-9]+);/chr($1)/ge;
+    $text =~ s/&amp;/&/g;
+    return $text;
+}
+
+sub clean_srt {
+    my ($text) = @_;
+    $text =~ s/^\x{FEFF}//;
     my @lines = split /\n/, $text;
     my @result;
     my %seen;
     for my $line (@lines) {
-        next if $line =~ /^WEBVTT/;
-        next if $line =~ /^Kind:/;
-        next if $line =~ /^Language:/;
         next if $line =~ /^\d+$/;
         next if $line =~ /-->/;
         next if $line =~ /^\s*$/;
@@ -96,13 +106,16 @@ sub clean_vtt {
         $line =~ s/<[^>]+>//g;
         $line =~ s/\{[^}]+\}//g;
         $line =~ s/\[[^\]]+\]//g;
+        $line = decode_entities($line);
         $line =~ s/^\s+|\s+$//g;
 
         next if $line eq '';
-
         next if $seen{$line}++;
 
         push @result, $line;
     }
-    return join("\n", @result);
+    my $joined = join(' ', @result);
+    $joined =~ s/\s+/ /g;
+    $joined =~ s/^\s+|\s+$//g;
+    return $joined;
 }
