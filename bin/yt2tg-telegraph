@@ -1,0 +1,87 @@
+#!/usr/bin/env perl
+use v5.36;
+use strict;
+use warnings;
+use utf8;
+use FindBin qw($Bin);
+use lib "$Bin/lib";
+use Encode qw(decode encode FB_CROAK);
+use JSON::PP ();
+use Tgph::CLI;
+use Tgph::ExitCodes;
+use Tgph::IO;
+use Yt2tg::Telegraph;
+
+sub read_bytes_file {
+    my ($path) = @_;
+    open my $fh, '<:raw', $path or return undef;
+    my $bytes = eval { Tgph::IO::read_bytes($fh) };
+    close $fh or return undef;
+    return undef if $@;
+    return $bytes;
+}
+
+my @argv = @ARGV;
+my ($meta_file, $section234_file);
+my ($options, $exit) = Tgph::CLI::parse(
+    \@argv,
+    spec => [
+        'meta|m=s'       => \$meta_file,
+        'section234|s=s' => \$section234_file,
+    ],
+);
+exit $exit unless $exit == Tgph::ExitCodes::OK;
+
+if ($options->{help}) {
+    print <<'HELP';
+Usage: yt2tg-telegraph --meta FILE --section234 FILE
+Builds Telegraph markdown from metadata and sections 2-4.
+Options:
+-h, --help             Show this help
+-V, --version          Show version
+-m, --meta FILE        Metadata JSON from yt2tg-meta (required)
+-s, --section234 FILE  Sections 2-4 markdown file (required)
+HELP
+    exit Tgph::ExitCodes::OK;
+}
+if ($options->{version}) {
+    exit Tgph::CLI::print_version();
+}
+
+if (!defined $meta_file || !defined $section234_file) {
+    warn "yt2tg-telegraph: --meta and --section234 are required\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+
+my $meta_bytes = read_bytes_file($meta_file);
+if (!defined $meta_bytes) {
+    warn "yt2tg-telegraph: cannot read meta file '$meta_file'\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+my $meta = eval { JSON::PP->new->utf8->decode($meta_bytes) };
+if ($@ || ref($meta) ne 'HASH') {
+    warn "yt2tg-telegraph: invalid JSON in meta file '$meta_file'\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+my $section234_bytes = read_bytes_file($section234_file);
+if (!defined $section234_bytes) {
+    warn "yt2tg-telegraph: cannot read section234 file '$section234_file'\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+my $section234 = eval { decode('UTF-8', $section234_bytes, FB_CROAK) };
+if ($@) {
+    warn "yt2tg-telegraph: section234 file is not valid UTF-8\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+my $markdown = Yt2tg::Telegraph::build_markdown(
+    title      => $meta->{title}   // '',
+    channel    => $meta->{channel} // '',
+    date       => $meta->{date}    // '',
+    section234 => $section234,
+);
+
+binmode STDOUT;
+print encode('UTF-8', $markdown);
+exit Tgph::ExitCodes::OK;
