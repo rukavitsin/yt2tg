@@ -29,10 +29,13 @@ sub format_message {
     my $title         = $args{title}         // '';
     my $channel       = $args{channel}       // '';
     my $date          = $args{date}          // '';
+    my $url           = $args{url}           // '';
     my $section1      = $args{section1}      // '';
     my $telegraph_url = $args{telegraph_url} // '';
 
     my $body = escape_html(strip_heading($section1));
+    my $src_link = '<a href="' . escape_html($url) . '">'
+        . escape_html($url) . '</a>';
     my $tg_link = '<a href="' . escape_html($telegraph_url) . '">'
         . escape_html($telegraph_url) . '</a>';
 
@@ -42,6 +45,8 @@ sub format_message {
         escape_html($channel),
         '',
         '<i>' . escape_html($date) . '</i>',
+        '',
+        'Джерело: ' . $src_link,
         '',
         $body,
         '',

@@ -45,6 +45,8 @@ sub run_command {
     is($status, 0, 'dry-run exits OK');
     my $text = is_utf8($output) ? $output : decode('UTF-8', $output);
     like($text, qr/<b>T<\/b>/, 'dry-run contains bold title');
+    like($text, qr/Джерело:/, 'dry-run contains source label');
+    like($text, qr{https://youtu\.be/x}, 'dry-run contains source url');
     like($text, qr/Підсумок/, 'dry-run contains section1 body');
     unlike($text, qr/### 1\./, 'dry-run strips heading');
     like($text, qr{https://telegra\.ph/p}, 'dry-run contains telegraph url');

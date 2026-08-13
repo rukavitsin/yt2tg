@@ -83,6 +83,7 @@ my $message = Yt2tg::Telegram::format_message(
     title         => $meta->{title}         // '',
     channel       => $meta->{channel}       // '',
     date          => $meta->{date}          // '',
+    url           => $meta->{url}           // '',
     section1      => $section1,
     telegraph_url => $telegraph_url,
 );

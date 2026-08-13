@@ -42,6 +42,7 @@ use Yt2tg::Telegram;
         title         => 'My Title',
         channel       => 'My Channel',
         date          => '2026-08-08, 17:00',
+        url           => 'https://youtu.be/abc',
         section1      => "### 1. Зміст\nSummary text.",
         telegraph_url => 'https://telegra.ph/xyz',
     );
@@ -49,6 +50,8 @@ use Yt2tg::Telegram;
     like($msg, qr/My Channel/, 'channel is present');
     unlike($msg, qr/<b>My Channel<\/b>/, 'channel is not bold');
     like($msg, qr/<i>2026-08-08, 17:00<\/i>/, 'date is italic');
+    like($msg, qr/Джерело:/, 'source label present');
+    like($msg, qr{<a href="https://youtu\.be/abc">}, 'source url linked');
     like($msg, qr/Summary text\./, 'section1 body present');
     unlike($msg, qr/### 1\./, 'section1 heading removed');
     like($msg, qr{<a href="https://telegra\.ph/xyz">}, 'telegraph url linked');
@@ -59,6 +62,7 @@ use Yt2tg::Telegram;
     my $msg = Yt2tg::Telegram::format_message(
         title    => 'A & B',
         channel  => 'C < D',
+        url      => 'https://youtu.be/x',
         section1 => "### 1. T\nx < y",
     );
     like($msg, qr/<b>A &amp; B<\/b>/, 'title html escaped');
