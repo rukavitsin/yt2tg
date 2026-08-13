@@ -1,0 +1,126 @@
+#!/usr/bin/env perl
+use v5.36;
+use strict;
+use warnings;
+use utf8;
+use FindBin qw($Bin);
+use lib "$Bin/lib";
+use Encode qw(decode encode FB_CROAK);
+use JSON::PP ();
+use Tgph::CLI;
+use Tgph::ExitCodes;
+use Tgph::IO;
+use Yt2tg::Config;
+use Yt2tg::Telegram;
+
+sub read_bytes_file {
+    my ($path) = @_;
+    open my $fh, '<:raw', $path or return undef;
+    my $bytes = eval { Tgph::IO::read_bytes($fh) };
+    close $fh or return undef;
+    return undef if $@;
+    return $bytes;
+}
+
+my @argv = @ARGV;
+my ($meta_file, $section1_file, $telegraph_url);
+my ($options, $exit) = Tgph::CLI::parse(
+    \@argv,
+    spec => [
+        'meta|m=s'          => \$meta_file,
+        'section1|s=s'      => \$section1_file,
+        'telegraph-url|u=s' => \$telegraph_url,
+    ],
+);
+exit $exit unless $exit == Tgph::ExitCodes::OK;
+
+if ($options->{help}) {
+    print <<'HELP';
+Usage: yt2tg-tg --meta FILE --section1 FILE --telegraph-url URL
+Publishes section 1 and Telegraph link to Telegram.
+Options:
+-h, --help               Show this help
+-V, --version            Show version
+-n, --dry-run            Print prepared message without sending
+-m, --meta FILE          Metadata JSON from yt2tg-meta (required)
+-s, --section1 FILE      Section 1 markdown file (required)
+-u, --telegraph-url URL  Telegraph page URL (required)
+HELP
+    exit Tgph::ExitCodes::OK;
+}
+if ($options->{version}) {
+    exit Tgph::CLI::print_version();
+}
+
+if (!defined $meta_file || !defined $section1_file || !defined $telegraph_url) {
+    warn "yt2tg-tg: --meta, --section1 and --telegraph-url are required\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+
+my $meta_bytes = read_bytes_file($meta_file);
+if (!defined $meta_bytes) {
+    warn "yt2tg-tg: cannot read meta file '$meta_file'\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+my $meta = eval { JSON::PP->new->utf8->decode($meta_bytes) };
+if ($@ || ref($meta) ne 'HASH') {
+    warn "yt2tg-tg: invalid JSON in meta file '$meta_file'\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+my $section1_bytes = read_bytes_file($section1_file);
+if (!defined $section1_bytes) {
+    warn "yt2tg-tg: cannot read section1 file '$section1_file'\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+my $section1 = eval { decode('UTF-8', $section1_bytes, FB_CROAK) };
+if ($@) {
+    warn "yt2tg-tg: section1 file is not valid UTF-8\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+my $message = Yt2tg::Telegram::format_message(
+    title         => $meta->{title}         // '',
+    channel       => $meta->{channel}       // '',
+    date          => $meta->{date}          // '',
+    section1      => $section1,
+    telegraph_url => $telegraph_url,
+);
+
+if ($options->{dry_run}) {
+    binmode STDOUT;
+    print encode('UTF-8', $message);
+    exit Tgph::ExitCodes::OK;
+}
+
+my $config = Yt2tg::Config::load();
+my $token   = $config->{tg_token};
+my $chat_id = $config->{tg_chat_id};
+my $api_url = $config->{tg_url} // 'https://api.telegram.org';
+
+if (!defined $token || !length $token) {
+    warn "yt2tg-tg: TG_TOKEN not found in ~/.tgrc\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+if (!defined $chat_id || !length $chat_id) {
+    warn "yt2tg-tg: TG_CHAT_ID not found in ~/.tgrc\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+
+my $result = eval {
+    Yt2tg::Telegram::send_message(
+        token   => $token,
+        chat_id => $chat_id,
+        text    => $message,
+        api_url => $api_url,
+    );
+};
+if ($@) {
+    warn "yt2tg-tg: $@";
+    exit Tgph::ExitCodes::API;
+}
+
+if (ref($result) eq 'HASH' && defined $result->{message_id}) {
+    print "message_id=$result->{message_id}\n";
+}
+exit Tgph::ExitCodes::OK;
