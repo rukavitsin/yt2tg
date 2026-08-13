@@ -1,0 +1,87 @@
+#!/usr/bin/env perl
+use v5.36;
+use strict;
+use warnings;
+use utf8;
+use FindBin qw($Bin);
+use lib "$Bin/lib";
+use JSON::PP ();
+use Tgph::CLI;
+use Tgph::ExitCodes;
+use Yt2tg::Journal;
+
+my @argv = @ARGV;
+my $action = '';
+
+if (@argv && $argv[0] =~ /^(check|append)$/) {
+    $action = shift @argv;
+}
+
+my ($journal_file, $video_id, $record_json);
+my ($options, $exit) = Tgph::CLI::parse(
+    \@argv,
+    spec => [
+        'journal|j=s'  => \$journal_file,
+        'video-id=s'   => \$video_id,
+        'record|r=s'   => \$record_json,
+    ],
+);
+exit $exit unless $exit == Tgph::ExitCodes::OK;
+
+if ($options->{help}) {
+    print <<'HELP';
+Usage: yt2tg-journal <check|append> [OPTIONS]
+Manages the publish journal (publish_log.jsonl).
+Commands:
+  check   Check if video_id was successfully published (exit 0 + URL, or 1)
+  append  Append a JSON record to the journal
+Options:
+-h, --help            Show this help
+-V, --version         Show version
+-j, --journal FILE    Journal file (default: publish_log.jsonl next to binary)
+    --video-id ID     Video ID (for check)
+-r, --record JSON     JSON record string (for append)
+HELP
+    exit Tgph::ExitCodes::OK;
+}
+if ($options->{version}) {
+    exit Tgph::CLI::print_version();
+}
+
+$journal_file //= "$Bin/publish_log.jsonl";
+
+if ($action eq 'check') {
+    if (!defined $video_id || !length $video_id) {
+        warn "yt2tg-journal: check requires --video-id\n";
+        exit Tgph::ExitCodes::USAGE;
+    }
+    my $rec = Yt2tg::Journal::find_record($journal_file, $video_id);
+    if ($rec && ($rec->{status} // '') eq 'success') {
+        my $url = $rec->{telegraph_url} // '';
+        binmode STDOUT;
+        print $url, "\n";
+        exit 0;
+    }
+    exit 1;
+}
+elsif ($action eq 'append') {
+    if (!defined $record_json || !length $record_json) {
+        warn "yt2tg-journal: append requires --record\n";
+        exit Tgph::ExitCodes::USAGE;
+    }
+    my $rec = eval { JSON::PP->new->utf8->decode($record_json) };
+    if ($@ || ref($rec) ne 'HASH') {
+        warn "yt2tg-journal: invalid JSON record\n";
+        exit Tgph::ExitCodes::INPUT;
+    }
+    eval { Yt2tg::Journal::append_record($journal_file, $rec) };
+    if ($@) {
+        warn "yt2tg-journal: $@";
+        exit Tgph::ExitCodes::OUTPUT;
+    }
+    exit Tgph::ExitCodes::OK;
+}
+else {
+    warn "yt2tg-journal: unknown or missing action (use 'check' or 'append')\n";
+    exit Tgph::ExitCodes::USAGE;
+}
