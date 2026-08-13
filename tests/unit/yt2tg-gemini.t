@@ -2,7 +2,6 @@ use v5.36;
 use strict;
 use warnings;
 use utf8;
-use open ':std', ':encoding(UTF-8)';
 use FindBin qw($Bin);
 use Test::More;
 my $script = "$Bin/../../bin/yt2tg-gemini";
@@ -16,6 +15,7 @@ sub run_command {
     my ($status, $output) = run_command("'$script' --help");
     is($status, 0, '--help exits OK');
     like($output, qr/Usage: yt2tg-gemini/, '--help reports usage');
+    like($output, qr/--output-file/, '--help mentions --output-file');
 }
 {
     my ($status, $output) = run_command("'$script' --version");

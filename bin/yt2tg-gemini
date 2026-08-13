@@ -24,26 +24,27 @@ sub read_utf8 {
 }
 
 my @argv = @ARGV;
-my ($prompt_file, $transcript_file);
+my ($prompt_file, $transcript_file, $output_file);
 my ($options, $exit) = Tgph::CLI::parse(
     \@argv,
     spec => [
         'prompt-file|p=s'     => \$prompt_file,
         'transcript-file|t=s' => \$transcript_file,
+        'output-file|o=s'     => \$output_file,
     ],
 );
 exit $exit unless $exit == Tgph::ExitCodes::OK;
 
 if ($options->{help}) {
     print <<'HELP';
-Usage: yt2tg-gemini --prompt-file FILE --transcript-file FILE
+Usage: yt2tg-gemini --prompt-file FILE --transcript-file FILE [OPTIONS]
 Sends transcript with prompt to Gemini, prints markdown response.
 Options:
 -h, --help                 Show this help
 -V, --version              Show version
--n, --dry-run              Print prepared request without sending
 -p, --prompt-file FILE     Prompt file (required)
 -t, --transcript-file FILE Transcript file (required)
+-o, --output-file FILE     Write response to FILE instead of stdout
 HELP
     exit Tgph::ExitCodes::OK;
 }
@@ -72,12 +73,6 @@ my $request = Yt2tg::Gemini::build_request(
     transcript => $transcript,
 );
 
-if ($options->{dry_run}) {
-    binmode STDOUT;
-    print Yt2tg::Gemini::encode_request($request);
-    exit Tgph::ExitCodes::OK;
-}
-
 my $config = Yt2tg::Config::load();
 my $url = $config->{url_gemini};
 if (!defined $url || !length $url) {
@@ -99,6 +94,18 @@ if ($@) {
     exit Tgph::ExitCodes::API;
 }
 
-binmode STDOUT;
-print encode('UTF-8', $markdown);
+if (defined $output_file && length $output_file) {
+    open my $fh, '>:raw', $output_file or do {
+        warn "yt2tg-gemini: cannot write '$output_file': $!\n";
+        exit Tgph::ExitCodes::OUTPUT;
+    };
+    print {$fh} encode('UTF-8', $markdown);
+    close $fh or do {
+        warn "yt2tg-gemini: cannot close '$output_file': $!\n";
+        exit Tgph::ExitCodes::OUTPUT;
+    };
+} else {
+    binmode STDOUT;
+    print encode('UTF-8', $markdown);
+}
 exit Tgph::ExitCodes::OK;
