@@ -120,6 +120,7 @@ perl -MJSON::PP -e '
     IFS= read -r title_fn
 } < "$WORK/meta_fields.txt"
 
+# C1: metadata fields
 if [ -z "$video_id" ] || [ -z "$date_short" ] || \
    [ -z "$channel_fn" ] || [ -z "$title_fn" ]; then
     die "$EX_INPUT" 'failed to extract metadata fields'
@@ -143,6 +144,8 @@ transcript=$("$BIN_DIR/yt2tg-subs" --output-dir "$WORK" "$url")
 if [ -z "$transcript" ] || [ ! -f "$transcript" ]; then
     die "$EX_INPUT" 'no subtitles found'
 fi
+# C2: transcript not empty
+[ -s "$transcript" ] || die "$EX_INPUT" 'transcript file is empty'
 srt_file="${transcript%.txt}.srt"
 cp "$transcript" "$SRT_DIR/${base_name}.txt"
 if [ -f "$srt_file" ]; then
@@ -157,11 +160,17 @@ response_md="$MD_DIR/${base_name}.md"
     --prompt-file "$prompt_file" \
     --transcript-file "$transcript" \
     --output-file "$response_md"
+# C3: response contains required headings
+grep -q '### 1\.' "$response_md" || die "$EX_API" 'Gemini response missing section 1 heading'
+grep -q '### 2\.' "$response_md" || die "$EX_API" 'Gemini response missing section 2 heading'
 info "Saved: $response_md"
 
 # --- 4. Split markdown ---
 step 4 'Splitting markdown'
 "$BIN_DIR/yt2tg-split-md" --out-dir "$WORK" "$response_md"
+# C4: split files not empty
+[ -s "$WORK/section1.md" ] || die "$EX_INPUT" 'section1.md is empty'
+[ -s "$WORK/section234.md" ] || die "$EX_INPUT" 'section234.md is empty'
 
 # --- 5. Build Telegraph markdown ---
 step 5 'Building Telegraph markdown'
@@ -174,17 +183,24 @@ telegraph_md=$WORK/telegraph.md
 step 6 'Publishing to Telegraph'
 "$BIN_DIR/pubtgph" "$telegraph_md" > "$WORK/telegraph_urls.txt"
 telegraph_url=$(head -1 "$WORK/telegraph_urls.txt")
-
-if [ -z "$telegraph_url" ]; then
-    die "$EX_API" 'Telegraph publish returned no URL'
-fi
+# C5: valid Telegraph URL
+case "$telegraph_url" in
+    https://telegra.ph/*) ;;
+    *) die "$EX_API" 'invalid Telegraph URL' ;;
+esac
 info "URL: $telegraph_url"
 
 # --- 7. Publish to Telegram ---
 step 7 'Publishing to Telegram'
-"$BIN_DIR/yt2tg-tg" \
+tg_output=$("$BIN_DIR/yt2tg-tg" \
     --meta "$meta_json" \
     --section1 "$WORK/section1.md" \
-    --telegraph-url "$telegraph_url"
+    --telegraph-url "$telegraph_url")
+# C6: Telegram returned message_id
+case "$tg_output" in
+    message_id=*) ;;
+    *) die "$EX_API" 'Telegram publish did not return message_id' ;;
+esac
+info "$tg_output"
 
 printf '%s\n' "$telegraph_url"
