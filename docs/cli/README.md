@@ -162,3 +162,53 @@ Message format (HTML parse_mode):
 Builds Telegraph markdown from metadata and sections 2-4.
 Options: -m/--meta FILE, -s/--section234 FILE.
 Outputs markdown to stdout for pubtgph.
+
+## yt2tg-journal
+
+    yt2tg-journal <check|append> [OPTIONS]
+
+Manages the publish journal (publish_log.jsonl).
+
+Commands:
+- check: Check if video_id was successfully published (exit 0 + URL, or 1)
+- append: Append a JSON record to the journal
+
+Options: -h/--help, -V/--version, -j/--journal FILE, --video-id ID, -r/--record JSON.
+
+Default journal file: publish_log.jsonl next to the binary.
+
+## yt2tg pipeline checks
+
+The yt2tg orchestrator performs checks at multiple stages:
+
+Pre-checks (before pipeline):
+- P1: yt-dlp in PATH
+- P2: cmark in PATH
+- P3/P4: ~/.tgrc and ~/.geminirc exist
+- P5: prompt file exists and is not empty
+- P6: URL is a valid YouTube URL
+- P7: video_id not already in publish journal (use --force to override)
+
+Intermediate checks (between steps):
+- C1: metadata fields extracted (video_id, date_short, channel_fn, title_fn)
+- C2: transcript file not empty
+- C3: Gemini response contains ### 1. and ### 2. headings
+- C4: section1.md and section234.md not empty
+- C5: Telegraph URL starts with https://telegra.ph/
+- C6: Telegram returned message_id
+
+Post-checks (after pipeline):
+- F1: artifacts (transcript.txt, response.md) exist
+- F2: journal record appended
+
+## yt2tg artifact storage
+
+Artifacts (srt/, md/) are stored in $XDG_DATA_HOME/pubtg/ (default: ~/.local/share/pubtg/).
+
+File naming: date--ID--channel_fn--title_fn.ext
+
+## yt2tg-subs update (Iteration 18)
+
+yt2tg-subs now downloads subtitles as SRT via yt-dlp --convert-subs srt (requires ffmpeg).
+The SRT is converted to a single-line TXT for Gemini processing.
+Both .srt and .txt files are saved to the srt/ directory.

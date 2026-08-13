@@ -78,3 +78,20 @@ Gemini     Gemini API client (build_request, parse_response, send_request)
 SplitMd    split markdown by section headings
 Telegram   Telegram message formatting and sending (HTML parse_mode)
 Telegraph  Telegraph markdown builder (front matter + heading levels)
+
+## yt2tg Publish Journal
+
+The publish journal (publish_log.jsonl) tracks successfully published videos.
+Located next to the orchestrator: $BIN_DIR/publish_log.jsonl.
+
+Format: JSON Lines (one JSON object per line).
+Fields: video_id, date_short, title, channel, telegraph_url, telegram_message_id, published_at, status.
+
+Before running the pipeline, yt2tg checks if video_id is already in the journal.
+Use --force to bypass this check.
+
+## yt2tg Artifact Storage
+
+Artifacts (srt/, md/) are stored in $XDG_DATA_HOME/pubtg/ (default: ~/.local/share/pubtg/).
+
+File naming: date--ID--channel_fn--title_fn.ext
