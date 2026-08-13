@@ -10,6 +10,7 @@ BIN_DIR=$SCRIPT_DIR
 EX_USAGE=1
 EX_INPUT=2
 EX_API=5
+EX_OUTPUT=6
 
 TOTAL_STEPS=7
 
@@ -111,6 +112,8 @@ perl -MJSON::PP -e '
     print(($d->{date_short} // ""), "\n");
     print(($d->{channel_fn} // ""), "\n");
     print(($d->{title_fn}   // ""), "\n");
+    print(($d->{title}      // ""), "\n");
+    print(($d->{channel}    // ""), "\n");
 ' "$meta_json" > "$WORK/meta_fields.txt"
 
 {
@@ -118,6 +121,8 @@ perl -MJSON::PP -e '
     IFS= read -r date_short
     IFS= read -r channel_fn
     IFS= read -r title_fn
+    IFS= read -r title
+    IFS= read -r channel
 } < "$WORK/meta_fields.txt"
 
 # C1: metadata fields
@@ -201,6 +206,36 @@ case "$tg_output" in
     message_id=*) ;;
     *) die "$EX_API" 'Telegram publish did not return message_id' ;;
 esac
-info "$tg_output"
+message_id="${tg_output#message_id=}"
+info "Telegram message_id: $message_id"
+
+# --- Post-checks ---
+# F1: Verify artifacts
+[ -f "$SRT_DIR/${base_name}.txt" ] || die "$EX_OUTPUT" 'transcript txt artifact missing'
+[ -f "$MD_DIR/${base_name}.md" ] || die "$EX_OUTPUT" 'response md artifact missing'
+
+# F2: Write journal record
+published_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+journal_record=$(VIDEO_ID="$video_id" DATE_SHORT="$date_short" TITLE="$title" CHANNEL="$channel" TELEGRAPH_URL="$telegraph_url" MESSAGE_ID="$message_id" PUBLISHED_AT="$published_at" perl -MJSON::PP -MEncode -e '
+    sub env_utf8 {
+        my ($key) = @_;
+        my $val = $ENV{$key} // "";
+        return eval { Encode::decode("UTF-8", $val, Encode::FB_CROAK) } // $val;
+    }
+    my $record = {
+        video_id => env_utf8("VIDEO_ID"),
+        date_short => env_utf8("DATE_SHORT"),
+        title => env_utf8("TITLE"),
+        channel => env_utf8("CHANNEL"),
+        telegraph_url => env_utf8("TELEGRAPH_URL"),
+        telegram_message_id => env_utf8("MESSAGE_ID"),
+        published_at => env_utf8("PUBLISHED_AT"),
+        status => "success",
+    };
+    binmode STDOUT, ":utf8";
+    print JSON::PP->new->encode($record);
+')
+"$BIN_DIR/yt2tg-journal" append --journal "$JOURNAL" --record "$journal_record"
+info "Journal record appended"
 
 printf '%s\n' "$telegraph_url"
