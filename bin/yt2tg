@@ -11,9 +11,19 @@ EX_USAGE=1
 EX_INPUT=2
 EX_API=5
 
+TOTAL_STEPS=7
+
 die() {
     printf '%s: %s\n' "$PROG" "$2" >&2
     exit "$1"
+}
+
+step() {
+    printf '[%s/%s] %s\n' "$1" "$TOTAL_STEPS" "$2" >&2
+}
+
+info() {
+    printf '      %s\n' "$1" >&2
 }
 
 version() {
@@ -68,10 +78,10 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
 # --- 1. Extract metadata ---
+step 1 'Extracting metadata'
 meta_json=$WORK/meta.json
 "$BIN_DIR/yt2tg-meta" "$url" > "$meta_json"
 
-# Extract fields in a single perl call
 perl -MJSON::PP -e '
     binmode STDOUT, ":utf8";
     open my $fh, "<:raw", $ARGV[0] or die "cannot open: $!";
@@ -97,39 +107,49 @@ if [ -z "$video_id" ] || [ -z "$date_short" ] || \
 fi
 
 base_name="${date_short}--${video_id}--${channel_fn}--${title_fn}"
+info "ID: $video_id"
 
 # --- 2. Download subtitles ---
+step 2 'Downloading subtitles'
 transcript=$("$BIN_DIR/yt2tg-subs" --output-dir "$WORK" "$url")
 if [ -z "$transcript" ] || [ ! -f "$transcript" ]; then
     die "$EX_INPUT" 'no subtitles found'
 fi
 cp "$transcript" "srt/${base_name}.txt"
+info "Saved: srt/${base_name}.txt"
 
 # --- 3. Send to Gemini ---
+step 3 'Sending to Gemini'
 response_md="md/${base_name}.md"
 "$BIN_DIR/yt2tg-gemini" \
     --prompt-file "$prompt_file" \
     --transcript-file "$transcript" \
     --output "$response_md"
+info "Saved: $response_md"
 
 # --- 4. Split markdown ---
+step 4 'Splitting markdown'
 "$BIN_DIR/yt2tg-split-md" --out-dir "$WORK" "$response_md"
 
 # --- 5. Build Telegraph markdown ---
+step 5 'Building Telegraph markdown'
 telegraph_md=$WORK/telegraph.md
 "$BIN_DIR/yt2tg-telegraph" \
     --meta "$meta_json" \
     --section234 "$WORK/section234.md" > "$telegraph_md"
 
 # --- 6. Publish to Telegraph ---
+step 6 'Publishing to Telegraph'
 "$BIN_DIR/pubtgph" "$telegraph_md" > "$WORK/telegraph_urls.txt"
 telegraph_url=$(head -1 "$WORK/telegraph_urls.txt")
 
 if [ -z "$telegraph_url" ]; then
     die "$EX_API" 'Telegraph publish returned no URL'
 fi
+info "URL: $telegraph_url"
 
 # --- 7. Publish to Telegram ---
+step 7 'Publishing to Telegram'
 "$BIN_DIR/yt2tg-tg" \
     --meta "$meta_json" \
     --section1 "$WORK/section1.md" \
