@@ -173,7 +173,9 @@ info "Saved: $response_md"
 
 # --- 4. Split markdown ---
 step 4 'Splitting markdown'
-"$BIN_DIR/yt2tg-split-md" --out-dir "$WORK" "$response_md"
+"$BIN_DIR/yt2tg-split-md" --out-dir "$WORK" "$response_md" >/dev/null
+info "$WORK/section1.md"
+info "$WORK/section234.md"
 [ -s "$WORK/section1.md" ] || die "$EX_INPUT" 'section1.md is empty'
 [ -s "$WORK/section234.md" ] || die "$EX_INPUT" 'section234.md is empty'
 

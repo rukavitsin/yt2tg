@@ -44,10 +44,8 @@ mkdir $output_dir unless -d $output_dir;
 my @langs;
 if (defined $custom_lang && length $custom_lang) {
     @langs = ($custom_lang);
-    diag("Using custom language: $custom_lang");
 } else {
     @langs = ('en', 'en.*', 'ru', 'ru.*', 'uk', 'uk.*', 'all');
-    diag("Using fallback sequence: " . join(', ', @langs));
 }
 
 my $srt_file;
@@ -55,7 +53,6 @@ my $srt_file;
 for my $lang (@langs) {
     diag("Trying language: $lang");
     my $cmd = "yt-dlp --write-auto-subs --write-subs --sub-langs '$lang' --convert-subs srt --skip-download -o '$output_dir/%(id)s.%(ext)s' " . quotemeta($url);
-    diag("Command: $cmd");
 
     my $output = `$cmd 2>&1`;
     my $status = $? >> 8;
@@ -69,10 +66,7 @@ for my $lang (@langs) {
         my @files = glob("$output_dir/*.srt");
         if (@files) {
             $srt_file = $files[0];
-            diag("Success: found $srt_file");
             last;
-        } else {
-            diag("No .srt files found in $output_dir");
         }
     }
 }
