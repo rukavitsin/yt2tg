@@ -79,6 +79,7 @@ my $markdown = Yt2tg::Telegraph::build_markdown(
     title      => $meta->{title}   // '',
     channel    => $meta->{channel} // '',
     date       => $meta->{date}    // '',
+    url        => $meta->{url}     // '',
     section234 => $section234,
 );
 

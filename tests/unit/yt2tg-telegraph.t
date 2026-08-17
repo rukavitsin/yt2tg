@@ -34,7 +34,7 @@ sub run_command {
     my $meta = "$tmpdir/meta.json";
     open my $mfh, '>:raw', $meta or die;
     print {$mfh} encode_utf8(
-        '{"title":"T","channel":"C","date":"2026-08-08, 17:00","url":"https://youtu.be/x"}');
+        '{"title":"T","channel":"C","date":"2026-08-08, 17:00","url":"http://youtu.be/x"}');
     close $mfh;
     my $sec = "$tmpdir/section234.md";
     open my $sfh, '>:raw', $sec or die;
@@ -47,6 +47,7 @@ sub run_command {
     like($text, qr/title: T/, 'output contains front matter title');
     like($text, qr/## T/, 'output contains h2 title');
     like($text, qr/\*\*C\*\*/, 'output contains bold channel');
+    like($text, qr/Джерело: http:\/\/youtu\.be\/x/, 'output contains source URL');
     like($text, qr/Виклад/, 'output contains section234 heading');
 }
 done_testing;

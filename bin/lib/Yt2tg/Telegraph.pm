@@ -9,6 +9,7 @@ sub build_markdown {
     my $title      = $args{title}      // '';
     my $channel    = $args{channel}    // '';
     my $date       = $args{date}       // '';
+    my $url        = $args{url}        // '';
     my $section234 = $args{section234} // '';
 
     $title =~ s/[\r\n]+/ /g;
@@ -17,7 +18,7 @@ sub build_markdown {
     $channel =~ s/\s+\z//;
     $section234 =~ s/\s+\z//;
 
-    return join "\n",
+    my @lines = (
         '---',
         "title: $title",
         '---',
@@ -28,8 +29,13 @@ sub build_markdown {
         '',
         "*$date*",
         '',
-        $section234,
-        '';
+    );
+    if (defined $url && length $url) {
+        push @lines, "Джерело: $url", '';
+    }
+    push @lines, $section234, '';
+
+    return join "\n", @lines;
 }
 
 1;

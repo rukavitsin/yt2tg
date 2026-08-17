@@ -53,7 +53,7 @@ my $timestamp = $data->{timestamp};
 my $date = Yt2tg::Metadata::format_time($timestamp);
 my $date_short = Yt2tg::Metadata::format_date_short($timestamp);
 my $id = $data->{id} // $video_id;
-my $webpage_url = $data->{webpage_url} // "https://youtu.be/$id";
+my $webpage_url = "http://youtu.be/$id";
 
 my $title_fn = Yt2tg::Metadata::clean_filename_part($title);
 my $channel_fn = Yt2tg::Metadata::clean_filename_part($channel);
