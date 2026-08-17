@@ -59,3 +59,8 @@ All core requirements implemented and tested.
 - No API for listing/deleting pages
 - No rate limiting logic (user must implement if needed)
 - cmark must be installed externally for markdown conversion
+
+## yt2tg Extension
+
+The yt2tg extension adds YouTube video processing capabilities to the pubtgph foundation.
+See [YT2TG_ROADMAP.md](YT2TG_ROADMAP.md) for the complete yt2tg roadmap.
