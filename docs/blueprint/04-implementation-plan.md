@@ -78,3 +78,36 @@ Depends on: nothing. Everything else depends on this.
 ## Stage 14  Documentation
 
     README, examples, STYLE/TESTING, this blueprint.
+
+## yt2tg Extension Implementation Status
+
+The yt2tg extension has been fully implemented and tested.
+
+### Completed Iterations
+
+| Iteration | Description | Status |
+|---|---|---|
+| 1-2 | Foundation (Config, Constants, git init) | Done |
+| 3 | Metadata module (emoji cleaning, timestamp) | Done |
+| 4.x | yt-dlp tools (yt2tg-meta, yt2tg-subs) | Done |
+| 5 | Gemini API client | Done |
+| 6 | Markdown section splitter | Done |
+| 7.x | Telegram publisher | Done |
+| 8 | Telegraph markdown builder | Done |
+| 9 | Orchestrator (POSIX sh) | Done |
+| 10-12 | Makefile, prompt.md, docs | Done |
+| 13 | Step progress output | Done |
+| 15-18 | --output-file, subtitle fallback, SRT format | Done |
+| 19 | Publish journal | Done |
+| 20-22 | Pre-checks, intermediate checks, post-checks | Done |
+| 23 | Docs update | Done |
+| 24 | Wildcard fallback, diagnostic, --lang | Done |
+| 25 | ID input, pass ID to yt-dlp | Done |
+| 26 | XDG_RUNTIME_DIR for temp | Done |
+| 27 | Reduce debug output | Done |
+| 28 | Link format (youtu.be, Telegraph source) | Done |
+| 29-30 | Blueprint docs, vision-and-requirements | Done |
+
+### Test Coverage
+
+685 tests, all PASS.
