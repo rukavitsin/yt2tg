@@ -50,3 +50,11 @@ Rules:
 - bin/lib/ holds logic; bin/ scripts are thin CLI wrappers.
 - Exit codes from Tgph::ExitCodes only.
 - UTF-8: decode on input, encode on output, never double-encode (lesson of 1.36).
+
+## Applicability to yt2tg Extension
+
+The code style defined in this document applies to the yt2tg extension.
+Additional yt2tg-specific style rules:
+- POSIX sh for orchestrator scripts (dash-compatible)
+- Perl modules follow the same style as Tgph modules
+- Diagnostic output to stderr, data output to stdout

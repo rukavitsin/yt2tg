@@ -41,3 +41,12 @@
 
 - One logical change per commit; message type(scope): subject.
 - Block must end green: final prove passes, tree clean.
+
+## Applicability to yt2tg Extension
+
+The engineering standards defined in this document apply to the yt2tg extension.
+Additional yt2tg-specific standards:
+- POSIX sh for orchestrator (no bashisms)
+- Perl modules in bin/lib/Yt2tg/
+- yt-dlp for YouTube metadata and subtitle extraction
+- ffmpeg for subtitle format conversion

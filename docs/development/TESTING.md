@@ -21,3 +21,11 @@
 - External tools (cmark) are optional: integration tests skip when absent.
 - No network inside prove; real API calls only in manual smoke runs.
 - UTF-8 assertions: decode module output before comparing with character regexes.
+
+## Applicability to yt2tg Extension
+
+The testing guidelines defined in this document apply to the yt2tg extension.
+Additional yt2tg-specific testing rules:
+- No network calls in tests (mock yt-dlp, Gemini API, Telegram API, Telegraph API)
+- Integration tests use temp directories for artifacts
+- All tests must pass with `prove -Ibin/lib -r tests`

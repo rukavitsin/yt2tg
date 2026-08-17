@@ -34,3 +34,8 @@ MODEL (architect, lead engineer):
 - Never mutate history; checkpoint moves forward only.
 - Real side effects (network publish) are gated behind explicit user GO.
 - Secrets (tokens) are read from ~/.tgrc, never printed, masked as *** in dry-run.
+
+## Applicability to yt2tg Extension
+
+The roles and protocol defined in this document apply to the yt2tg extension.
+The same iteration-based development protocol is used for both pubtgph and yt2tg components.
