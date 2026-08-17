@@ -4,6 +4,8 @@ use warnings;
 use utf8;
 use FindBin qw($Bin);
 use Test::More;
+use File::Temp qw(tempdir);
+use Encode qw(encode_utf8);
 my $script = "$Bin/../../bin/yt2tg-subs";
 sub run_command {
     my (@command) = @_;
@@ -15,6 +17,7 @@ sub run_command {
     my ($status, $output) = run_command("'$script' --help");
     is($status, 0, '--help exits OK');
     like($output, qr/Usage: yt2tg-subs/, '--help reports usage');
+    like($output, qr/--lang/, '--help mentions --lang option');
 }
 {
     my ($status, $output) = run_command("'$script' --version");
@@ -24,5 +27,10 @@ sub run_command {
 {
     my ($status, $output) = run_command("'$script'");
     is($status, 1, 'missing URL exits USAGE');
+}
+{
+    my ($status, $output) = run_command("'$script' --lang en https://youtu.be/invalid");
+    ok($status != 0, 'invalid URL with --lang does not succeed');
+    like($output, qr/yt2tg-subs:/, 'diagnostic output present');
 }
 done_testing;
