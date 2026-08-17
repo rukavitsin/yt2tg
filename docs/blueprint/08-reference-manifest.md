@@ -35,3 +35,7 @@
 ## External dependencies
 
     cmark (markdown -> HTML), IO::Socket::SSL (HTTPS), curl (smoke only)
+
+## yt2tg Extension Reference
+
+See [09-yt2tg-extension.md](09-yt2tg-extension.md) for the complete yt2tg extension specification, including pipeline steps, checks, journal, artifact storage, and future actions.
