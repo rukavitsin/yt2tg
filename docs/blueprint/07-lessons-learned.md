@@ -67,3 +67,34 @@ JOIN-REF
     join '' over page elements that are hash nodes after split v2.
     Node-aware joiner in tests.
     Standard: 06 testing rules.
+
+## yt2tg Extension Lessons Learned
+
+### Iteration 18: SRT Format
+- YouTube auto-subtitles are natively VTT/JSON3, not SRT
+- Use `yt-dlp --convert-subs srt` (requires ffmpeg) for SRT output
+- Single-line TXT improves Gemini's text reconstruction quality
+
+### Iteration 19: Publish Journal
+- JSON Lines format is simpler than full JSON for append-only logs
+- Journal check prevents duplicate publications
+- `--force` flag allows bypassing journal check
+
+### Iteration 20: Pre-checks Order
+- User input validation (URL, prompt) must come before environment checks (configs, tools)
+- This ensures clear error messages for user errors vs environment errors
+
+### Iteration 24: Subtitle Language Fallback
+- YouTube doesn't always provide subtitles with exact language codes
+- Use wildcard patterns (`en.*`) for auto-generated and regional variants
+- Diagnostic output in stderr helps debug subtitle download issues
+
+### Iteration 25: ID Input
+- Accept both URL and 11-character video ID for flexibility
+- Pass ID directly to yt-dlp (it accepts both formats)
+- Extract ID from URL using regex for consistent handling
+
+### Iteration 27: Debug Output
+- Minimal debug output improves user experience
+- Only show essential progress (step number, errors)
+- Redirect tool stdout to /dev/null when output is not needed
