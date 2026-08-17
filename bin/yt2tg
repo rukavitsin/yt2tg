@@ -72,11 +72,9 @@ if [ -z "$input" ]; then
 fi
 
 # --- Parse input: extract video_id ---
-# 11-character video ID (alphanumeric + - and _)
 if printf '%s' "$input" | grep -qE '^[A-Za-z0-9_-]{11}$'; then
     video_id="$input"
 else
-    # Extract ID from YouTube URL
     video_id=$(printf '%s' "$input" | perl -ne '
         if (m{(?:v=|youtu\.be/|/shorts/)([A-Za-z0-9_-]{11})}) { print $1; exit 0; }
         exit 1;
@@ -84,13 +82,9 @@ else
 fi
 
 # --- Pre-checks (user input first, then environment) ---
-# P5: prompt file
 [ -s "$prompt_file" ] || die "$EX_INPUT" "prompt file '$prompt_file' is empty or missing"
-# P1: yt-dlp
 command -v yt-dlp >/dev/null 2>&1 || die "$EX_USAGE" 'yt-dlp not found in PATH'
-# P2: cmark
 command -v cmark >/dev/null 2>&1 || die "$EX_USAGE" 'cmark not found in PATH'
-# P3/P4: config files
 [ -f "$HOME/.tgrc" ] || die "$EX_INPUT" '~/.tgrc not found'
 [ -f "$HOME/.geminirc" ] || die "$EX_INPUT" '~/.geminirc not found'
 
@@ -101,8 +95,9 @@ SRT_DIR="$DATA_DIR/srt"
 MD_DIR="$DATA_DIR/md"
 JOURNAL="$BIN_DIR/publish_log.jsonl"
 
-# Temp workspace
-WORK=$(mktemp -d)
+# Temp workspace in XDG_RUNTIME_DIR (fallback /tmp)
+RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
+WORK=$(mktemp -d "$RUNTIME_DIR/yt2tg.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 
 # --- 1. Extract metadata ---
@@ -157,7 +152,6 @@ transcript=$("$BIN_DIR/yt2tg-subs" --output-dir "$WORK" "$vid_id")
 if [ -z "$transcript" ] || [ ! -f "$transcript" ]; then
     die "$EX_INPUT" 'no subtitles found'
 fi
-# C2: transcript not empty
 [ -s "$transcript" ] || die "$EX_INPUT" 'transcript file is empty'
 srt_file="${transcript%.txt}.srt"
 cp "$transcript" "$SRT_DIR/${base_name}.txt"
@@ -173,7 +167,6 @@ response_md="$MD_DIR/${base_name}.md"
     --prompt-file "$prompt_file" \
     --transcript-file "$transcript" \
     --output-file "$response_md"
-# C3: response contains required headings
 grep -q '### 1\.' "$response_md" || die "$EX_API" 'Gemini response missing section 1 heading'
 grep -q '### 2\.' "$response_md" || die "$EX_API" 'Gemini response missing section 2 heading'
 info "Saved: $response_md"
@@ -181,7 +174,6 @@ info "Saved: $response_md"
 # --- 4. Split markdown ---
 step 4 'Splitting markdown'
 "$BIN_DIR/yt2tg-split-md" --out-dir "$WORK" "$response_md"
-# C4: split files not empty
 [ -s "$WORK/section1.md" ] || die "$EX_INPUT" 'section1.md is empty'
 [ -s "$WORK/section234.md" ] || die "$EX_INPUT" 'section234.md is empty'
 
@@ -196,7 +188,6 @@ telegraph_md=$WORK/telegraph.md
 step 6 'Publishing to Telegraph'
 "$BIN_DIR/pubtgph" "$telegraph_md" > "$WORK/telegraph_urls.txt"
 telegraph_url=$(head -1 "$WORK/telegraph_urls.txt")
-# C5: valid Telegraph URL
 case "$telegraph_url" in
     https://telegra.ph/*) ;;
     *) die "$EX_API" 'invalid Telegraph URL' ;;
@@ -209,7 +200,6 @@ tg_output=$("$BIN_DIR/yt2tg-tg" \
     --meta "$meta_json" \
     --section1 "$WORK/section1.md" \
     --telegraph-url "$telegraph_url")
-# C6: Telegram returned message_id
 case "$tg_output" in
     message_id=*) ;;
     *) die "$EX_API" 'Telegram publish did not return message_id' ;;
@@ -218,11 +208,9 @@ message_id="${tg_output#message_id=}"
 info "Telegram message_id: $message_id"
 
 # --- Post-checks ---
-# F1: Verify artifacts
 [ -f "$SRT_DIR/${base_name}.txt" ] || die "$EX_OUTPUT" 'transcript txt artifact missing'
 [ -f "$MD_DIR/${base_name}.md" ] || die "$EX_OUTPUT" 'response md artifact missing'
 
-# F2: Write journal record
 published_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 journal_record=$(VIDEO_ID="$vid_id" DATE_SHORT="$date_short" TITLE="$title" CHANNEL="$channel" TELEGRAPH_URL="$telegraph_url" MESSAGE_ID="$message_id" PUBLISHED_AT="$published_at" perl -MJSON::PP -MEncode -e '
     sub env_utf8 {
