@@ -23,3 +23,5 @@ using only this folder plus a stock Perl 5.36 + dash environment.
   triple backticks (see 07-lessons-learned.md, item FENCES).
 - Shell is POSIX sh (dash). Perl is core-modules-only.
 - One commit per logical change; every block ends green.
+
+- [09-yt2tg-extension.md](09-yt2tg-extension.md) — yt2tg Extension (YouTube-to-Telegram/Telegraph pipeline)

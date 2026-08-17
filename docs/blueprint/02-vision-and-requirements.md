@@ -37,3 +37,23 @@ splitting oversized content into linked pages automatically.
 - editPage / list / delete / stats API calls.
 - rate limiting and concurrency control.
 - bundling cmark (external dependency).
+
+## yt2tg Extension Requirements
+
+The yt2tg extension adds YouTube video processing capabilities to the pubtgph foundation.
+
+### Functional Requirements
+- Accept YouTube URL or 11-character video ID as input
+- Extract metadata (title, channel, date) via yt-dlp
+- Download subtitles as SRT, convert to single-line TXT for Gemini
+- Send transcript + prompt to Gemini LLM
+- Split markdown response into sections
+- Publish sections 2-4 to Telegraph
+- Publish section 1 + Telegraph URL to Telegram
+- Track published videos in a journal to prevent duplicates
+
+### Non-Functional Requirements
+- Use XDG directories for artifacts ($XDG_DATA_HOME/pubtg)
+- Use XDG_RUNTIME_DIR for temp workspace
+- Minimal debug output (only errors and essential progress)
+- All checks (pre, intermediate, post) for robustness
