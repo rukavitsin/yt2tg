@@ -34,8 +34,9 @@ version() {
 
 usage() {
     cat <<EOF_USAGE
-Usage: $PROG [OPTIONS] YOUTUBE_URL
+Usage: $PROG [OPTIONS] YOUTUBE_URL_OR_ID
 Pipeline: yt-dlp -> Gemini -> Telegraph -> Telegram
+Input: full YouTube URL or 11-character video ID
 Options:
 -h, --help            Show this help
 -V, --version         Show version
@@ -47,7 +48,7 @@ EOF_USAGE
 
 prompt_file='prompt.md'
 force=''
-url=''
+input=''
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -57,25 +58,32 @@ while [ $# -gt 0 ]; do
         -f|--force) force=1; shift ;;
         -*) die "$EX_USAGE" "unknown option: $1" ;;
         *)
-            if [ -n "$url" ]; then
-                die "$EX_USAGE" 'multiple URLs not allowed'
+            if [ -n "$input" ]; then
+                die "$EX_USAGE" 'multiple inputs not allowed'
             fi
-            url=$1
+            input=$1
             shift
             ;;
     esac
 done
 
-if [ -z "$url" ]; then
-    die "$EX_USAGE" 'YOUTUBE_URL is required'
+if [ -z "$input" ]; then
+    die "$EX_USAGE" 'YOUTUBE_URL_OR_ID is required'
+fi
+
+# --- Parse input: extract video_id ---
+# 11-character video ID (alphanumeric + - and _)
+if printf '%s' "$input" | grep -qE '^[A-Za-z0-9_-]{11}$'; then
+    video_id="$input"
+else
+    # Extract ID from YouTube URL
+    video_id=$(printf '%s' "$input" | perl -ne '
+        if (m{(?:v=|youtu\.be/|/shorts/)([A-Za-z0-9_-]{11})}) { print $1; exit 0; }
+        exit 1;
+    ') || die "$EX_USAGE" "invalid YouTube URL or video ID"
 fi
 
 # --- Pre-checks (user input first, then environment) ---
-# P6: URL validation
-case "$url" in
-    http://www.youtube.com/*|https://www.youtube.com/*|http://youtube.com/*|https://youtube.com/*|http://youtu.be/*|https://youtu.be/*|http://m.youtube.com/*|https://m.youtube.com/*) ;;
-    *) die "$EX_USAGE" 'invalid YouTube URL' ;;
-esac
 # P5: prompt file
 [ -s "$prompt_file" ] || die "$EX_INPUT" "prompt file '$prompt_file' is empty or missing"
 # P1: yt-dlp
@@ -100,7 +108,7 @@ trap 'rm -rf "$WORK"' EXIT
 # --- 1. Extract metadata ---
 step 1 'Extracting metadata'
 meta_json=$WORK/meta.json
-"$BIN_DIR/yt2tg-meta" "$url" > "$meta_json"
+"$BIN_DIR/yt2tg-meta" "$video_id" > "$meta_json"
 
 perl -MJSON::PP -e '
     binmode STDOUT, ":utf8";
@@ -117,7 +125,7 @@ perl -MJSON::PP -e '
 ' "$meta_json" > "$WORK/meta_fields.txt"
 
 {
-    IFS= read -r video_id
+    IFS= read -r vid_id
     IFS= read -r date_short
     IFS= read -r channel_fn
     IFS= read -r title_fn
@@ -126,26 +134,26 @@ perl -MJSON::PP -e '
 } < "$WORK/meta_fields.txt"
 
 # C1: metadata fields
-if [ -z "$video_id" ] || [ -z "$date_short" ] || \
+if [ -z "$vid_id" ] || [ -z "$date_short" ] || \
    [ -z "$channel_fn" ] || [ -z "$title_fn" ]; then
     die "$EX_INPUT" 'failed to extract metadata fields'
 fi
 
-info "ID: $video_id"
+info "ID: $vid_id"
 
 # P7: Journal check
 if [ -z "$force" ]; then
-    if "$BIN_DIR/yt2tg-journal" check --journal "$JOURNAL" --video-id "$video_id" >/dev/null 2>&1; then
+    if "$BIN_DIR/yt2tg-journal" check --journal "$JOURNAL" --video-id "$vid_id" >/dev/null 2>&1; then
         info "Already published. Use --force to republish."
         exit 0
     fi
 fi
 
-base_name="${date_short}--${video_id}--${channel_fn}--${title_fn}"
+base_name="${date_short}--${vid_id}--${channel_fn}--${title_fn}"
 
 # --- 2. Download subtitles ---
 step 2 'Downloading subtitles'
-transcript=$("$BIN_DIR/yt2tg-subs" --output-dir "$WORK" "$url")
+transcript=$("$BIN_DIR/yt2tg-subs" --output-dir "$WORK" "$vid_id")
 if [ -z "$transcript" ] || [ ! -f "$transcript" ]; then
     die "$EX_INPUT" 'no subtitles found'
 fi
@@ -216,7 +224,7 @@ info "Telegram message_id: $message_id"
 
 # F2: Write journal record
 published_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-journal_record=$(VIDEO_ID="$video_id" DATE_SHORT="$date_short" TITLE="$title" CHANNEL="$channel" TELEGRAPH_URL="$telegraph_url" MESSAGE_ID="$message_id" PUBLISHED_AT="$published_at" perl -MJSON::PP -MEncode -e '
+journal_record=$(VIDEO_ID="$vid_id" DATE_SHORT="$date_short" TITLE="$title" CHANNEL="$channel" TELEGRAPH_URL="$telegraph_url" MESSAGE_ID="$message_id" PUBLISHED_AT="$published_at" perl -MJSON::PP -MEncode -e '
     sub env_utf8 {
         my ($key) = @_;
         my $val = $ENV{$key} // "";

@@ -16,8 +16,9 @@ exit $exit unless $exit == Tgph::ExitCodes::OK;
 
 if ($options->{help}) {
     print <<"HELP";
-Usage: yt2tg-meta URL
+Usage: yt2tg-meta VIDEO_ID
 Extracts YouTube metadata (title, channel, date) via yt-dlp.
+Accepts a 11-character video ID directly.
 Options:
 -h, --help       Show this help
 -V, --version    Show version
@@ -29,9 +30,9 @@ if ($options->{version}) {
 }
 
 exit Tgph::ExitCodes::USAGE if @argv != 1;
-my $url = $argv[0];
+my $video_id = $argv[0];
 
-my $cmd = "yt-dlp -j --no-playlist " . quotemeta($url);
+my $cmd = "yt-dlp -j --no-playlist " . quotemeta($video_id);
 my $output = `$cmd 2>/dev/null`;
 my $status = $? >> 8;
 
@@ -51,14 +52,14 @@ my $channel = Yt2tg::Metadata::clean_text($data->{channel} // $data->{uploader} 
 my $timestamp = $data->{timestamp};
 my $date = Yt2tg::Metadata::format_time($timestamp);
 my $date_short = Yt2tg::Metadata::format_date_short($timestamp);
-my $video_id = $data->{id} // '';
-my $webpage_url = $data->{webpage_url} // $url;
+my $id = $data->{id} // $video_id;
+my $webpage_url = $data->{webpage_url} // "https://youtu.be/$id";
 
 my $title_fn = Yt2tg::Metadata::clean_filename_part($title);
 my $channel_fn = Yt2tg::Metadata::clean_filename_part($channel);
 
 my $result = {
-    video_id => $video_id,
+    video_id => $id,
     title => $title,
     channel => $channel,
     date => $date,
