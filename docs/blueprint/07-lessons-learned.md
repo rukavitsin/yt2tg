@@ -99,76 +99,54 @@ JOIN-REF
 - Only show essential progress (step number, errors)
 - Redirect tool stdout to /dev/null when output is not needed
 
-### Iteration 35: UTF-8 Double Encoding in Telegram
-- Shell arguments with UTF-8 characters arrive as raw bytes, not decoded strings
-- `decode('UTF-8', $arg)` must be called explicitly before concatenation with decoded strings
-- Symptom: Cyrillic `І` (U+0406) becomes `Ð` (U+00D0) — first byte of UTF-8 sequence interpreted as Latin-1
 
-### Iteration 36: Dubbed-Auto Videos Language Priority
-- YouTube generates auto-captions for the **audio track**, not the original video language
-- Dubbed videos have auto-captions on the dub language, not original
-- Solution: add `language` + `language-orig` to priority list, limit auto-captions to first 5
+## Iterations 35-46: pipeline hardening (subtitles, UTF-8, Telegram, Telegraph)
 
-### Iteration 37: Wide Character in Print in tgph-publish
-- `binmode STDOUT;` without encoding layer causes "Wide character in print" warnings
-- Fix: use `binmode STDOUT, ":encoding(UTF-8)";`
+### UTF-8 handling
+- CLI arguments arrive as raw bytes; explicitly `decode('UTF-8', $arg, FB_CROAK)` before mixing with decoded strings (35)
+- Double-encoding symptom: Cyrillic `І` (U+0406) rendered as `Ð` (U+00D0) (35)
+- `binmode STDOUT;` without a layer warns "Wide character in print" for Unicode; use `binmode STDOUT, ":encoding(UTF-8)";` (37)
+- Telegraph renders HTML comments as visible text — never inject `<!-- ... -->` markers into content (45/46)
 
-### Iteration 39: Formatting is each process's responsibility
-- Do not use `--indent` flags or `PUBTG_INDENT` env vars to format child process stderr
-- Each tool formats its own output with its own prefix (e.g., `yt2tg-subs:`)
-- Orchestrator formats its own messages; child stderr passes through unchanged
+### YouTube subtitle language priority
+- YouTube auto-captions are generated per **audio track**, not per original video language (dubbed videos!) (36)
+- `language` metadata may be a regional variant (`en-US`) while captions exist only for base (`en`); put base BEFORE regional: `en, en-orig, en-US, en-US-orig` (42.6/42.8)
+- `automatic_captions` holds ~150 languages in arbitrary order (`keys_unsorted` is NOT priority) — do not use it for priority; rely on `language` + `subtitles` + hardcoded fallback `en, en.*, ru, ru.*, uk, uk.*, all` (42.7)
+- Filter non-language keys like `live_chat` (41)
+- yt-dlp may exit 0 without creating a file ("no subtitles available") — always verify file existence after download (41)
 
-### Iteration 41: Preserve YouTube Language Order
-- `sort keys %$hash` destroys YouTube's priority order for subtitle languages
-- JSON already provides keys in priority order — preserve insertion order
-- `live_chat` and similar non-language keys appear in `automatic_captions` — must be filtered
-- yt-dlp can exit 0 without creating a file ("no subtitles available") — must check file existence
+### JSON parsing pitfalls (Perl + jq)
+- Perl hashes are unordered: `sort keys` destroys source order; `JSON::PP->encode` does not preserve order (41/42)
+- Naive regex over raw JSON picks up nested track fields (`ext`, `url`, `name`, `video_id`) as "languages" (42)
+- Character-by-character JSON parsing in Perl hangs on 100+ KB payloads (42.1)
+- `echo "$json" | jq` exceeds ARG_MAX on large payloads; fork and feed jq via stdin instead (42.3)
+- Perl `qq{}` interpolates `$"` inside jq regexes (`test("...$")`); build jq filters with `q{}` + concatenation (42.4)
 
-### Iteration 42: Proper Top-Level JSON Key Extraction
-- `JSON::PP->new->encode($hash)` does NOT preserve key order (Perl hashes are unordered)
-- Regex `/"([^"]+)"\s*:/g` on raw JSON extracts ALL keys, including nested ones inside track objects
-- Fields like `video_id`, `ext`, `protocol`, `url`, `name` are **track properties**, not languages
-- Solution: track brace/bracket depth when parsing raw JSON to extract only top-level keys
-- Filter known non-language keys (`live_chat`) explicitly
+### Shell/Perl escaping and patching
+- sed with `|` delimiter breaks when pattern contains `|`; sed `a\`/`c\` text eats backslashes (45)
+- In shell double quotes `\$` becomes `$`; to grep a literal `\$` use single quotes or `\\\$` (45.4-45.6)
+- perl `-pi -e` replacement side interpolates `$VAR` — escape as `\$VAR` (45.1)
+- Prefer full-file heredoc rewrites or perl `\Q\E` over chained sed for multi-hunk patches (45)
 
-### Iteration 42: Fast JSON Key Extraction
-- Character-by-character JSON parsing hangs on large input (yt-dlp output is 100+ KB)
-- Use `JSON::PP::decode_json()` for fast parsing, then `keys %$hash` for extraction
-- Filter non-language keys: `live_chat` and keys not matching `/^[a-z]{2,3}(-[a-zA-Z0-9]+)?$/`
-- Alphabetical order is acceptable — YouTube's order is not always meaningful anyway
+### CLI and subprocess design
+- `--indent`-style CLI flags for output formatting are an anti-pattern; final design: `Tgph::Diag` module + `PUBTG_INDENT` env var (UNIX way, like NO_COLOR), set once by orchestrator (39 -> 40)
+- Each tool prefixes its own diagnostics (`yt2tg-subs:`); data goes to stdout, diagnostics to stderr (39/40)
 
-### Iteration 42: Use jq for JSON Key Extraction
-- Perl character-by-character parsing hangs on large input
-- `JSON::PP` loses key order (hashes are unordered)
-- Solution: use `jq` with `keys_unsorted` to preserve YouTube's language priority order
-- Filter with `select(. != "live_chat" and test("^[a-z]{2,3}(-[a-zA-Z0-9]+)?$"))`
+### Getopt::Long
+- Case-insensitive by default: alias `T` collides with `t` ("Duplicate specification") (45)
+- Option values in spec must be references (`\$var`); bare `$var` dies with "Undefined argument in option spec" (45.3)
 
-### Iteration 42.3: Avoid ARG_MAX with jq Pipe
-- `echo "$json" | jq` passes JSON as shell argument — fails with "Argument list too long" on 100+ KB
-- Solution: use `open($fh, '-|')` to fork, child runs jq and reads JSON from stdin
-- Pipe-based approach has no shell argument size limit
+### Telegram API
+- `sendMessage` with a YouTube URL triggers auto video preview; use `disable_web_page_preview=true` (43)
+- Better: publish thumbnail (480px `mqdefault`) via `sendPhoto` multipart upload with HTML caption — no link preview at all (43)
+- Photo caption limit is 1024 chars vs 4096 for messages (43)
 
-### Iteration 42.4: Perl qq{} Interpolates $" (Breaks jq regex)
-- Perl `qq{...}` interpolates `$"` (list separator) inside jq regex like `test("...$")`
-- `$"` becomes Perl's `$)` (effective GID list), corrupting the regex
-- Solution: use string concatenation `'.' . $section . q{...}'` instead of `qq{}`
-- `q{}` does NOT interpolate anything
+### Telegraph / Cocoon AI Summary
+- `createPage` API has no parameter to disable AI summaries; unknown params silently ignored (45)
+- "Cocoon AI Summary" is generated **by the Telegram client**, not by telegra.ph servers — verified: absent in regular browser, present in Telegram (46)
+- Server-side opt-out impossible; it is a client feature (46)
 
-### Iteration 42.5: Base Language Fallback for Regional Variants
-- YouTube `language` field may contain regional variant (`en-US`) while auto-captions have only base language (`en`)
-- Solution: after `language`, also add base language (without region suffix) to priority list
-- Regex `/^([a-z]{2,3})(-[a-zA-Z0-9]+)?$/` extracts base from `en-US` -> `en`, `uk` -> `uk`
-- Order: `language`, `language-orig`, `base`, `base-orig`, `subtitles`, `automatic_captions[0..4]`
-
-### Iteration 42.7: Drop automatic_captions from Priority
-- `automatic_captions` contains ~150 languages, including obscure ones (`ab`, `aa`, `af`)
-- `jq keys_unsorted` returns keys in arbitrary order, not YouTube's priority
-- Even first 5 from this list pollute the priority output with irrelevant languages
-- Solution: use only `language` (with base fallback) + `subtitles` + hardcoded fallback list
-- `yt-dlp --write-auto-subs` still fetches auto-captions; fallback `en, ru, uk, all` covers common cases
-
-### Iteration 42.8: Prioritize Base Language Over Regional Variant
-- yt-dlp `language` field may contain regional variant (`en-US`) while auto-captions have only base (`en`)
-- YouTube often provides base language in auto-captions, not regional variants
-- Solution: always put base language **before** regional variant in priority
-- Example: `en-US` → `en, en-orig, en-US, en-US-orig` (not `en-US, en-US-orig, en, en-orig`)
+### Process discipline
+- Always `git add` every changed file (38: orchestrator fix landed one commit late)
+- Keep iteration numbering consistent (42.x chain)
+- Unit tests cannot catch real-world API behaviour (HTTP 429, real YouTube JSON shape, client-side rendering) — run real end-to-end checks after each pipeline change (36-46)
