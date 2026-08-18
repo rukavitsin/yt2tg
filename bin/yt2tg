@@ -201,7 +201,7 @@ telegraph_md=$WORK/telegraph.md
 
 # --- 6. Publish to Telegraph ---
 step 6 'Publishing to Telegraph'
-"$BIN_DIR/pubtgph" --no-ai-summary "$telegraph_md" > "$WORK/telegraph_urls.txt"
+"$BIN_DIR/pubtgph" "$telegraph_md" > "$WORK/telegraph_urls.txt"
 telegraph_url=$(head -1 "$WORK/telegraph_urls.txt")
 case "$telegraph_url" in
     https://telegra.ph/*) ;;

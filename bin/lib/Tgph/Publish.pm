@@ -50,15 +50,6 @@ sub prepare_requests {
     for my $i (0 .. $#$pages) {
         my $page = $pages->[$i];
 
-        # Inject no-AI-summary marker as first node if requested
-        if ($opts{no_ai_summary} && ref($page) eq 'ARRAY') {
-            my @with_marker = (
-                { tag => 'p', children => ['<!--no-ai-summary-->'] },
-                @$page,
-            );
-            $page = \@with_marker;
-        }
-
         my $content_bytes = Tgph::JSON::encode($page);
         my $content_chars = decode('UTF-8', $content_bytes, FB_CROAK);
 
@@ -77,11 +68,6 @@ sub prepare_requests {
 
         if (defined $opts{access_token} && length $opts{access_token}) {
             $fields{access_token} = $opts{access_token};
-        }
-
-        # Pass API-level flag to disable AI summary (if supported)
-        if ($opts{no_ai_summary}) {
-            $fields{disable_ai_summary} = 'true';
         }
 
         push @requests, {

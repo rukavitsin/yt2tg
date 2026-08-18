@@ -41,7 +41,6 @@ Options:
       --api-url URL         API base URL (default: \$TP_URL from ~/.tgrc)
   -n, --dry-run             Print prepared API requests without publishing
   -j, --json                Output full API results as JSON
-      --no-ai-summary       Disable Telegraph Cocoon AI summary
 EOF
     exit 0
 }
@@ -54,7 +53,6 @@ access_token=''
 api_url=''
 dry_run=''
 json_out=''
-no_ai_summary=''
 md_file=''
 
 while [ $# -gt 0 ]; do
@@ -69,7 +67,6 @@ while [ $# -gt 0 ]; do
         --api-url)        api_url=$2; shift 2 ;;
         -n|--dry-run)     dry_run=1; shift ;;
         -j|--json)        json_out=1; shift ;;
-        --no-ai-summary)  no_ai_summary=1; shift ;;
         -*)               die "$EX_USAGE" "unknown option: $1" ;;
         *)
             if [ -n "$md_file" ]; then
@@ -164,10 +161,6 @@ fi
 
 if [ -n "$json_out" ]; then
     set -- "$@" --json
-fi
-
-if [ -n "$no_ai_summary" ]; then
-    set -- "$@" --no-ai-summary
 fi
 
 set -- "$@" --title-file "$title_file" "$linked"
