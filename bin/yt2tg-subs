@@ -6,6 +6,7 @@ use FindBin qw($Bin);
 use lib "$Bin/lib";
 use JSON::PP ();
 use Tgph::CLI;
+use Tgph::Diag qw(diag);
 use Tgph::ExitCodes;
 
 my @argv = @ARGV;
@@ -45,15 +46,17 @@ my $url = $argv[0];
 
 mkdir $output_dir unless -d $output_dir;
 
+sub d { diag(@_, prefix => 'yt2tg-subs: ') }
+
 my @langs;
 if (defined $custom_lang && length $custom_lang) {
     @langs = ($custom_lang);
-    diag("Using custom language: $custom_lang");
+    d("Using custom language: $custom_lang");
 } else {
     my @priority_langs;
 
     if (defined $meta_file && -f $meta_file) {
-        open my $mfh, '<:raw', $meta_file or diag("cannot open meta file: $!");
+        open my $mfh, '<:raw', $meta_file or d("cannot open meta file: $!");
         if ($mfh) {
             my $json = do { local $/; <$mfh> };
             close $mfh;
@@ -82,21 +85,21 @@ if (defined $custom_lang && length $custom_lang) {
     %seen = ();
     @langs = grep { !$seen{$_}++ } @langs;
 
-    diag("Priority: " . join(', ', @priority_langs)) if @priority_langs;
+    d("Priority: " . join(', ', @priority_langs)) if @priority_langs;
 }
 
 my $srt_file;
 
 for my $lang (@langs) {
-    diag("Trying language: $lang");
+    d("Trying language: $lang");
     my $cmd = "yt-dlp --write-auto-subs --write-subs --sub-langs '$lang' --convert-subs srt --skip-download -o '$output_dir/%(id)s.%(ext)s' " . quotemeta($url);
 
     my $output = `$cmd 2>&1`;
     my $status = $? >> 8;
 
     if ($status != 0) {
-        diag("yt-dlp failed with status $status");
-        diag("stderr/stdout: $output") if $output =~ /\S/;
+        d("yt-dlp failed with status $status");
+        d("stderr/stdout: $output") if $output =~ /\S/;
     }
 
     if ($status == 0) {
@@ -133,11 +136,6 @@ close $out;
 
 print "$txt_file\n";
 exit Tgph::ExitCodes::OK;
-
-sub diag {
-    my ($msg) = @_;
-    print STDERR "yt2tg-subs: $msg\n";
-}
 
 sub decode_entities {
     my ($text) = @_;

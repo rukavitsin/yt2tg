@@ -100,6 +100,9 @@ RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 WORK=$(mktemp -d "$RUNTIME_DIR/yt2tg.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 
+# Set diagnostic indent for all subprocesses
+export PUBTG_INDENT=6
+
 # --- 1. Extract metadata ---
 step 1 'Extracting metadata'
 meta_json=$WORK/meta.json
