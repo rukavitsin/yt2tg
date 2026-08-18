@@ -123,3 +123,10 @@ JOIN-REF
 - JSON already provides keys in priority order — preserve insertion order
 - `live_chat` and similar non-language keys appear in `automatic_captions` — must be filtered
 - yt-dlp can exit 0 without creating a file ("no subtitles available") — must check file existence
+
+### Iteration 42: Proper Top-Level JSON Key Extraction
+- `JSON::PP->new->encode($hash)` does NOT preserve key order (Perl hashes are unordered)
+- Regex `/"([^"]+)"\s*:/g` on raw JSON extracts ALL keys, including nested ones inside track objects
+- Fields like `video_id`, `ext`, `protocol`, `url`, `name` are **track properties**, not languages
+- Solution: track brace/bracket depth when parsing raw JSON to extract only top-level keys
+- Filter known non-language keys (`live_chat`) explicitly

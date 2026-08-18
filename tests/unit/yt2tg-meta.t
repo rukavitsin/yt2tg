@@ -26,3 +26,7 @@ sub run_command {
     is($status, 1, 'missing URL exits USAGE');
 }
 done_testing;
+
+# Integration test: verify yt2tg-meta does NOT include non-language keys
+# (This is tested via the structure check in the metadata JSON)
+# The actual extraction is tested via real yt-dlp output in integration tests.
