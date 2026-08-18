@@ -98,3 +98,22 @@ JOIN-REF
 - Minimal debug output improves user experience
 - Only show essential progress (step number, errors)
 - Redirect tool stdout to /dev/null when output is not needed
+
+### Iteration 35: UTF-8 Double Encoding in Telegram
+- Shell arguments with UTF-8 characters arrive as raw bytes, not decoded strings
+- `decode('UTF-8', $arg)` must be called explicitly before concatenation with decoded strings
+- Symptom: Cyrillic `І` (U+0406) becomes `Ð` (U+00D0) — first byte of UTF-8 sequence interpreted as Latin-1
+
+### Iteration 36: Dubbed-Auto Videos Language Priority
+- YouTube generates auto-captions for the **audio track**, not the original video language
+- Dubbed videos have auto-captions on the dub language, not original
+- Solution: add `language` + `language-orig` to priority list, limit auto-captions to first 5
+
+### Iteration 37: Wide Character in Print in tgph-publish
+- `binmode STDOUT;` without encoding layer causes "Wide character in print" warnings
+- Fix: use `binmode STDOUT, ":encoding(UTF-8)";`
+
+### Iteration 39: Formatting is each process's responsibility
+- Do not use `--indent` flags or `PUBTG_INDENT` env vars to format child process stderr
+- Each tool formats its own output with its own prefix (e.g., `yt2tg-subs:`)
+- Orchestrator formats its own messages; child stderr passes through unchanged

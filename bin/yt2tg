@@ -148,7 +148,7 @@ base_name="${date_short}--${vid_id}--${channel_fn}--${title_fn}"
 
 # --- 2. Download subtitles ---
 step 2 'Downloading subtitles'
-transcript=$("$BIN_DIR/yt2tg-subs" --output-dir "$WORK" --meta-file "$meta_json" --indent 6 "$vid_id")
+transcript=$("$BIN_DIR/yt2tg-subs" --output-dir "$WORK" --meta-file "$meta_json" "$vid_id")
 if [ -z "$transcript" ] || [ ! -f "$transcript" ]; then
     die "$EX_INPUT" 'no subtitles found'
 fi
