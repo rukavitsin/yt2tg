@@ -58,40 +58,26 @@ my $webpage_url = "http://youtu.be/$id";
 my $title_fn = Yt2tg::Metadata::clean_filename_part($title);
 my $channel_fn = Yt2tg::Metadata::clean_filename_part($channel);
 
-# Use jq via pipe (not shell argument) to avoid "Argument list too long"
+# Extract language keys via jq (preserves order). Feed JSON via stdin to avoid ARG_MAX.
+# IMPORTANT: use string concat, NOT qq{} — Perl's $" interpolation breaks jq regex.
 sub extract_lang_keys_jq {
     my ($raw_json, $section) = @_;
+    my $filter = '.' . $section . q{ // {} | keys_unsorted[] | select(. != "live_chat" and test("^[a-z]{2,3}(-[a-zA-Z0-9]+)?$"))};
 
-    # Build jq filter: .subtitles // {} | keys_unsorted[] | select(...)
-    my $jq_filter = qq{.$section // {} | keys_unsorted[] | select(. != "live_chat" and test("^[a-z]{2,3}(-[a-zA-Z0-9]+)?$"))};
-
-    # Open pipe to jq, write JSON to stdin
-    my $jq = IO::File->new;
-    $jq->open("|-") or return ();
-    if (my $pid = open(my $child, '|-', 'jq', '-r', $jq_filter)) {
-        binmode $child, ':raw';
-        print $child $raw_json;
-        close $child;
-        waitpid $pid, 0;
-    } else {
-        # Fallback: use temporary file
-    }
-
-    # Simpler approach: open pipe, read output
-    my @keys;
     my $pid = open(my $fh, '-|');
     return () unless defined $pid;
 
     if ($pid == 0) {
-        # Child: run jq, feed JSON via stdin
-        open(my $jq_fh, '|-', 'jq', '-r', $jq_filter) or exit 1;
+        # Child: feed JSON to jq via stdin
+        open(my $jq_fh, '|-', 'jq', '-r', $filter) or exit 1;
         binmode $jq_fh, ':raw';
         print $jq_fh $raw_json;
-        close $jq_fh;
-        exit $? >> 8;
+        close $jq_fh or exit 1;
+        exit 0;
     }
 
     # Parent: read jq output
+    my @keys;
     while (my $line = <$fh>) {
         chomp $line;
         push @keys, $line if length $line;

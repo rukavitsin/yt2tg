@@ -147,3 +147,9 @@ JOIN-REF
 - `echo "$json" | jq` passes JSON as shell argument — fails with "Argument list too long" on 100+ KB
 - Solution: use `open($fh, '-|')` to fork, child runs jq and reads JSON from stdin
 - Pipe-based approach has no shell argument size limit
+
+### Iteration 42.4: Perl qq{} Interpolates $" (Breaks jq regex)
+- Perl `qq{...}` interpolates `$"` (list separator) inside jq regex like `test("...$")`
+- `$"` becomes Perl's `$)` (effective GID list), corrupting the regex
+- Solution: use string concatenation `'.' . $section . q{...}'` instead of `qq{}`
+- `q{}` does NOT interpolate anything
