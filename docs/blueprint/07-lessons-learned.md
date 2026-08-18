@@ -166,3 +166,9 @@ JOIN-REF
 - Even first 5 from this list pollute the priority output with irrelevant languages
 - Solution: use only `language` (with base fallback) + `subtitles` + hardcoded fallback list
 - `yt-dlp --write-auto-subs` still fetches auto-captions; fallback `en, ru, uk, all` covers common cases
+
+### Iteration 42.8: Prioritize Base Language Over Regional Variant
+- yt-dlp `language` field may contain regional variant (`en-US`) while auto-captions have only base (`en`)
+- YouTube often provides base language in auto-captions, not regional variants
+- Solution: always put base language **before** regional variant in priority
+- Example: `en-US` → `en, en-orig, en-US, en-US-orig` (not `en-US, en-US-orig, en, en-orig`)

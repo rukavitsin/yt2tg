@@ -62,20 +62,29 @@ if (defined $custom_lang && length $custom_lang) {
             close $mfh;
             my $meta = eval { JSON::PP->new->utf8->decode($json) };
             if (!$@ && ref($meta) eq 'HASH') {
-                # 1. Original video language (highest priority)
+                # 1. Original video language: base first, then regional
+                #    e.g., "en-US" -> "en, en-orig, en-US, en-US-orig"
+                #          "uk"     -> "uk, uk-orig" (no change)
                 if (defined $meta->{language} && length $meta->{language}) {
                     my $lang = $meta->{language};
-                    push @priority_langs, $lang;
-                    push @priority_langs, $lang . '-orig';
-                    # Base language (without region suffix)
                     if ($lang =~ /^([a-z]{2,3})(-[a-zA-Z0-9]+)?$/) {
                         my $base = $1;
-                        push @priority_langs, $base;
-                        push @priority_langs, $base . '-orig';
+                        my $suffix = $2 // '';
+                        # Base language first (if different from full lang)
+                        if (length $suffix) {
+                            push @priority_langs, $base;
+                            push @priority_langs, $base . '-orig';
+                        }
+                        # Then regional variant
+                        push @priority_langs, $lang;
+                        push @priority_langs, $lang . '-orig';
+                    } else {
+                        # Fallback: just add as-is
+                        push @priority_langs, $lang;
+                        push @priority_langs, $lang . '-orig';
                     }
                 }
                 # 2. Manual subtitle languages only
-                #    (automatic_captions dropped — ~150 langs pollute priority)
                 if (ref($meta->{subtitles}) eq 'ARRAY') {
                     push @priority_langs, @{$meta->{subtitles}};
                 }
