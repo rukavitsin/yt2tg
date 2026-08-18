@@ -159,3 +159,10 @@ JOIN-REF
 - Solution: after `language`, also add base language (without region suffix) to priority list
 - Regex `/^([a-z]{2,3})(-[a-zA-Z0-9]+)?$/` extracts base from `en-US` -> `en`, `uk` -> `uk`
 - Order: `language`, `language-orig`, `base`, `base-orig`, `subtitles`, `automatic_captions[0..4]`
+
+### Iteration 42.7: Drop automatic_captions from Priority
+- `automatic_captions` contains ~150 languages, including obscure ones (`ab`, `aa`, `af`)
+- `jq keys_unsorted` returns keys in arbitrary order, not YouTube's priority
+- Even first 5 from this list pollute the priority output with irrelevant languages
+- Solution: use only `language` (with base fallback) + `subtitles` + hardcoded fallback list
+- `yt-dlp --write-auto-subs` still fetches auto-captions; fallback `en, ru, uk, all` covers common cases

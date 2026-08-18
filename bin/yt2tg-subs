@@ -67,22 +67,17 @@ if (defined $custom_lang && length $custom_lang) {
                     my $lang = $meta->{language};
                     push @priority_langs, $lang;
                     push @priority_langs, $lang . '-orig';
-                    # 2. Base language (without region suffix)
-                    #    e.g., "en-US" -> "en", "uk" -> "uk" (no change)
+                    # Base language (without region suffix)
                     if ($lang =~ /^([a-z]{2,3})(-[a-zA-Z0-9]+)?$/) {
                         my $base = $1;
                         push @priority_langs, $base;
                         push @priority_langs, $base . '-orig';
                     }
                 }
-                # 3. Manual subtitle languages (in YouTube order)
+                # 2. Manual subtitle languages only
+                #    (automatic_captions dropped — ~150 langs pollute priority)
                 if (ref($meta->{subtitles}) eq 'ARRAY') {
                     push @priority_langs, @{$meta->{subtitles}};
-                }
-                # 4. Auto-caption languages (in YouTube order, first 5)
-                if (ref($meta->{automatic_captions}) eq 'ARRAY') {
-                    my @auto = @{$meta->{automatic_captions}};
-                    push @priority_langs, splice(@auto, 0, 5);
                 }
             }
         }
@@ -92,7 +87,7 @@ if (defined $custom_lang && length $custom_lang) {
     my %seen;
     @priority_langs = grep { !$seen{$_}++ } @priority_langs;
 
-    # Fallback list (always appended)
+    # Fallback list (covers all common cases including auto-captions)
     my @fallback = ('en', 'en.*', 'ru', 'ru.*', 'uk', 'uk.*', 'all');
     @langs = (@priority_langs, @fallback);
     %seen = ();
