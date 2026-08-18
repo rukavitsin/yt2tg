@@ -25,6 +25,13 @@ use Yt2tg::Metadata;
 }
 
 {
+    my $raw = 'Kenya : un mal mystérieux décime les éléphants • FRANCE 24';
+    my $clean = Yt2tg::Metadata::strip_emoji($raw);
+    is($clean, 'Kenya : un mal mystérieux décime les éléphants • FRANCE 24',
+        'French accents and bullet • preserved');
+}
+
+{
     my $raw = 'Hello *world* ~strike~ `code`';
     my $clean = Yt2tg::Metadata::strip_emoji($raw);
     is($clean, 'Hello *world* ~strike~ `code`',

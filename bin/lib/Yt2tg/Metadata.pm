@@ -6,17 +6,22 @@ use utf8;
 use POSIX qw(strftime);
 
 # Rule set 2: for text messages/publications
-# Removes ONLY emoji (Extended_Pictographic + variation selectors + ZWJ).
-# Preserves markdown (*, _, #, ~, `), punctuation, letters, digits.
+# Removes ONLY emoji using \p{Emoji_Presentation} (color emoji).
+# Preserves markdown, punctuation, letters with accents, digits.
 sub strip_emoji {
     my ($text) = @_;
     return '' unless defined $text;
-    # Remove emoji and pictographic symbols
-    $text =~ s/\p{Extended_Pictographic}//g;
-    # Remove variation selectors (U+FE00-FE0F) and zero-width joiner (U+200D)
-    # which may be left behind after emoji removal
+
+    # Remove emoji with presentation (color emoji)
+    $text =~ s/\p{Emoji_Presentation}//g;
+
+    # Remove remaining emoji without presentation (some dingbats, symbols)
+    $text =~ s/[\x{2600}-\x{26FF}\x{2700}-\x{27BF}\x{1F000}-\x{1FFFF}]//g;
+
+    # Remove variation selectors and ZWJ left behind
     $text =~ s/[\x{FE00}-\x{FE0F}\x{200D}]//g;
-    # Collapse whitespace left by removed emoji
+
+    # Collapse whitespace
     $text =~ s/\s+/ /g;
     $text =~ s/^\s+|\s+$//g;
     return $text;
