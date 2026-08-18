@@ -64,14 +64,22 @@ if (defined $custom_lang && length $custom_lang) {
             if (!$@ && ref($meta) eq 'HASH') {
                 # 1. Original video language (highest priority)
                 if (defined $meta->{language} && length $meta->{language}) {
-                    push @priority_langs, $meta->{language};
-                    push @priority_langs, $meta->{language} . '-orig';
+                    my $lang = $meta->{language};
+                    push @priority_langs, $lang;
+                    push @priority_langs, $lang . '-orig';
+                    # 2. Base language (without region suffix)
+                    #    e.g., "en-US" -> "en", "uk" -> "uk" (no change)
+                    if ($lang =~ /^([a-z]{2,3})(-[a-zA-Z0-9]+)?$/) {
+                        my $base = $1;
+                        push @priority_langs, $base;
+                        push @priority_langs, $base . '-orig';
+                    }
                 }
-                # 2. Manual subtitle languages (in YouTube order)
+                # 3. Manual subtitle languages (in YouTube order)
                 if (ref($meta->{subtitles}) eq 'ARRAY') {
                     push @priority_langs, @{$meta->{subtitles}};
                 }
-                # 3. Auto-caption languages (in YouTube order, first 5)
+                # 4. Auto-caption languages (in YouTube order, first 5)
                 if (ref($meta->{automatic_captions}) eq 'ARRAY') {
                     my @auto = @{$meta->{automatic_captions}};
                     push @priority_langs, splice(@auto, 0, 5);

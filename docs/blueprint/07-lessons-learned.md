@@ -153,3 +153,9 @@ JOIN-REF
 - `$"` becomes Perl's `$)` (effective GID list), corrupting the regex
 - Solution: use string concatenation `'.' . $section . q{...}'` instead of `qq{}`
 - `q{}` does NOT interpolate anything
+
+### Iteration 42.5: Base Language Fallback for Regional Variants
+- YouTube `language` field may contain regional variant (`en-US`) while auto-captions have only base language (`en`)
+- Solution: after `language`, also add base language (without region suffix) to priority list
+- Regex `/^([a-z]{2,3})(-[a-zA-Z0-9]+)?$/` extracts base from `en-US` -> `en`, `uk` -> `uk`
+- Order: `language`, `language-orig`, `base`, `base-orig`, `subtitles`, `automatic_captions[0..4]`
