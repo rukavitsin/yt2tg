@@ -57,6 +57,9 @@ if (!defined $meta_file || !defined $section1_file || !defined $telegraph_url) {
     exit Tgph::ExitCodes::USAGE;
 }
 
+# Decode telegraph_url from shell args (raw bytes -> UTF-8 string)
+$telegraph_url = decode('UTF-8', $telegraph_url, FB_CROAK);
+
 my $meta_bytes = read_bytes_file($meta_file);
 if (!defined $meta_bytes) {
     warn "yt2tg-tg: cannot read meta file '$meta_file'\n";
