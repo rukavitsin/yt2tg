@@ -27,6 +27,7 @@ Options:
       --access-token TOKEN  Telegraph access token (or TGPH_ACCESS_TOKEN)
       --api-url URL         API base URL (default: https://api.telegra.ph)
       --timeout SECONDS     HTTP timeout in seconds (default: 30)
+      --no-ai-summary       Disable Telegraph Cocoon AI summary
   -j, --json                Output full API results as JSON
 HELP
     return Tgph::ExitCodes::OK;
@@ -84,6 +85,7 @@ my @argv = @ARGV;
 
 my ($title, $title_file, $author_name, $author_url, $access_token, $api_url, $timeout, $json_mode);
 
+my $no_ai_summary;
 my ($options, $exit) = Tgph::CLI::parse(
     \@argv,
     spec => [
@@ -95,6 +97,7 @@ my ($options, $exit) = Tgph::CLI::parse(
         'api-url=s'       => \$api_url,
         'timeout=i'       => \$timeout,
         'json|j'          => \$json_mode,
+        'no-ai-summary'   => \$no_ai_summary,
     ],
 );
 
@@ -240,6 +243,7 @@ my $requests = eval {
         author_name  => $author_name,
         author_url   => $author_url,
         access_token => $access_token,
+        no_ai_summary => $no_ai_summary,
     );
 };
 
