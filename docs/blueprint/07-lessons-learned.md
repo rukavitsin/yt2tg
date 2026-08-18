@@ -142,3 +142,8 @@ JOIN-REF
 - `JSON::PP` loses key order (hashes are unordered)
 - Solution: use `jq` with `keys_unsorted` to preserve YouTube's language priority order
 - Filter with `select(. != "live_chat" and test("^[a-z]{2,3}(-[a-zA-Z0-9]+)?$"))`
+
+### Iteration 42.3: Avoid ARG_MAX with jq Pipe
+- `echo "$json" | jq` passes JSON as shell argument — fails with "Argument list too long" on 100+ KB
+- Solution: use `open($fh, '-|')` to fork, child runs jq and reads JSON from stdin
+- Pipe-based approach has no shell argument size limit
