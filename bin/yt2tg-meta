@@ -47,7 +47,7 @@ if ($@ || ref($data) ne 'HASH') {
     exit Tgph::ExitCodes::INPUT;
 }
 
-my $title = Yt2tg::Metadata::strip_emoji($data->{title} // '');
+my $title = Yt2tg::Metadata::strip_emoji($data->{fulltitle} // $data->{title} // '');
 my $channel = Yt2tg::Metadata::strip_emoji($data->{channel} // $data->{uploader} // '');
 my $timestamp = $data->{timestamp};
 my $date = Yt2tg::Metadata::format_time($timestamp);
