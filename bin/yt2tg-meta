@@ -58,6 +58,23 @@ my $webpage_url = "http://youtu.be/$id";
 my $title_fn = Yt2tg::Metadata::clean_filename_part($title);
 my $channel_fn = Yt2tg::Metadata::clean_filename_part($channel);
 
+# Extract available subtitle languages
+my $subs = $data->{subtitles};
+my $auto_caps = $data->{automatic_captions};
+my @sub_keys = ref($subs) eq 'HASH' ? sort keys %$subs : ();
+my @auto_keys = ref($auto_caps) eq 'HASH' ? sort keys %$auto_caps : ();
+
+# Detect original language from automatic_captions (look for xx-orig pattern)
+my $original_lang = $data->{language};
+if (!defined $original_lang || !length $original_lang) {
+    for my $lang (@auto_keys) {
+        if ($lang =~ /^([a-z]{2,3})-orig$/) {
+            $original_lang = $1;
+            last;
+        }
+    }
+}
+
 my $result = {
     video_id => $id,
     title => $title,
@@ -67,6 +84,9 @@ my $result = {
     url => $webpage_url,
     title_fn => $title_fn,
     channel_fn => $channel_fn,
+    language => $original_lang,
+    subtitles => \@sub_keys,
+    automatic_captions => \@auto_keys,
 };
 
 print JSON::PP->new->canonical->utf8->encode($result);

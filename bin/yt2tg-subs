@@ -4,17 +4,22 @@ use strict;
 use warnings;
 use FindBin qw($Bin);
 use lib "$Bin/lib";
+use JSON::PP ();
 use Tgph::CLI;
 use Tgph::ExitCodes;
 
 my @argv = @ARGV;
 my $output_dir = 'srt';
 my $custom_lang;
+my $meta_file;
+my $indent = '';
 my ($options, $exit) = Tgph::CLI::parse(
     \@argv,
     spec => [
         'output-dir|o=s' => \$output_dir,
         'lang|l=s'       => \$custom_lang,
+        'meta-file|m=s'  => \$meta_file,
+        'indent=i'       => \$indent,
     ],
 );
 exit $exit unless $exit == Tgph::ExitCodes::OK;
@@ -29,6 +34,8 @@ Options:
 -o, --output-dir DIR  Output directory for subtitles (default: srt)
 -l, --lang LANG       Force specific language (skip fallback)
                       Examples: en, en.*, ru, uk, all
+-m, --meta-file FILE  Metadata JSON from yt2tg-meta (for smart lang detection)
+    --indent N        Indent diagnostic output by N spaces
 HELP
     exit Tgph::ExitCodes::OK;
 }
@@ -41,11 +48,52 @@ my $url = $argv[0];
 
 mkdir $output_dir unless -d $output_dir;
 
+# Build language priority list
 my @langs;
 if (defined $custom_lang && length $custom_lang) {
     @langs = ($custom_lang);
+    diag("Using custom language: $custom_lang");
 } else {
-    @langs = ('en', 'en.*', 'ru', 'ru.*', 'uk', 'uk.*', 'all');
+    my @priority_langs;
+
+    # Parse metadata for available languages
+    if (defined $meta_file && -f $meta_file) {
+        open my $mfh, '<:raw', $meta_file or diag("cannot open meta file: $!");
+        if ($mfh) {
+            my $json = do { local $/; <$mfh> };
+            close $mfh;
+            my $meta = eval { JSON::PP->new->utf8->decode($json) };
+            if (!$@ && ref($meta) eq 'HASH') {
+                # 1. Original video language (highest priority)
+                if (defined $meta->{language} && length $meta->{language}) {
+                    push @priority_langs, $meta->{language};
+                    # Also add -orig variant for original audio
+                    push @priority_langs, $meta->{language} . '-orig';
+                }
+                # 2. Manual subtitle languages
+                if (ref($meta->{subtitles}) eq 'ARRAY') {
+                    push @priority_langs, @{$meta->{subtitles}};
+                }
+                # 3. Auto-caption languages
+                if (ref($meta->{automatic_captions}) eq 'ARRAY') {
+                    push @priority_langs, @{$meta->{automatic_captions}};
+                }
+            }
+        }
+    }
+
+    # Deduplicate
+    my %seen;
+    @priority_langs = grep { !$seen{$_}++ } @priority_langs;
+
+    # Fallback list
+    my @fallback = ('en', 'en.*', 'ru', 'ru.*', 'uk', 'uk.*', 'all');
+
+    @langs = (@priority_langs, @fallback);
+    %seen = ();
+    @langs = grep { !$seen{$_}++ } @langs;
+
+    diag("Priority: " . join(', ', @priority_langs)) if @priority_langs;
 }
 
 my $srt_file;
@@ -99,7 +147,8 @@ exit Tgph::ExitCodes::OK;
 
 sub diag {
     my ($msg) = @_;
-    print STDERR "yt2tg-subs: $msg\n";
+    my $prefix = ' ' x $indent;
+    print STDERR "${prefix}yt2tg-subs: $msg\n";
 }
 
 sub decode_entities {
