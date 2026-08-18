@@ -33,15 +33,15 @@ exit Tgph::ExitCodes::USAGE if @argv != 1;
 my $video_id = $argv[0];
 
 my $cmd = "yt-dlp -j --no-playlist " . quotemeta($video_id);
-my $raw = `$cmd 2>/dev/null`;
+my $output = `$cmd 2>/dev/null`;
 my $status = $? >> 8;
 
-if ($status != 0 || !$raw) {
+if ($status != 0 || !$output) {
     warn "yt2tg-meta: failed to fetch metadata from YouTube\n";
     exit Tgph::ExitCodes::API;
 }
 
-my $data = eval { JSON::PP::decode_json($raw) };
+my $data = eval { JSON::PP::decode_json($output) };
 if ($@ || ref($data) ne 'HASH') {
     warn "yt2tg-meta: invalid JSON from yt-dlp\n";
     exit Tgph::ExitCodes::INPUT;
@@ -58,53 +58,18 @@ my $webpage_url = "http://youtu.be/$id";
 my $title_fn = Yt2tg::Metadata::clean_filename_part($title);
 my $channel_fn = Yt2tg::Metadata::clean_filename_part($channel);
 
-# Non-language keys to filter out
-my %non_lang = map { $_ => 1 } qw(live_chat);
-
-# Extract top-level keys from a JSON section (preserving order)
-sub extract_top_level_keys {
-    my ($raw_json, $section_name) = @_;
-    my @keys;
-
-    # Find "$section_name": {
-    my $pattern = quotemeta("\"$section_name\"") . '\\s*:\\s*\\{';
-    if ($raw_json =~ /$pattern/g) {
-        my $start = pos($raw_json);
-        # Find matching closing }
-        my $depth = 1;
-        my $i = $start;
-        while ($depth > 0 && $i < length($raw_json)) {
-            my $ch = substr($raw_json, $i, 1);
-            if ($ch eq '{') { $depth++ }
-            elsif ($ch eq '}') { $depth-- }
-            $i++;
-        }
-        my $end = $i - 1;
-        my $block = substr($raw_json, $start, $end - $start);
-
-        # Parse top-level keys in block (track nesting depth)
-        my $d = 0;
-        my $j = 0;
-        while ($j < length($block)) {
-            my $ch = substr($block, $j, 1);
-            if ($ch eq '{' || $ch eq '[') { $d++ }
-            elsif ($ch eq '}' || $ch eq ']') { $d-- }
-            elsif ($ch eq '"' && $d == 0) {
-                # Top-level key
-                if (substr($block, $j) =~ /^"([^"]+)"\s*:/) {
-                    my $k = $1;
-                    next if $non_lang{$k};
-                    push @keys, $k unless grep { $_ eq $k } @keys;
-                }
-            }
-            $j++;
-        }
-    }
+# Use jq to extract language keys (preserves order, filters non-language)
+sub extract_lang_keys_jq {
+    my ($raw_json, $section) = @_;
+    my $jq_cmd = qq{echo '$raw_json' | jq -r '."$section" // {} | keys_unsorted[] | select(. != "live_chat" and test("^[a-z]{2,3}(-[a-zA-Z0-9]+)?$"))'};
+    my $result = `$jq_cmd 2>/dev/null`;
+    return () unless defined $result && length $result;
+    my @keys = split /\n/, $result;
     return @keys;
 }
 
-my @sub_keys = extract_top_level_keys($raw, 'subtitles');
-my @auto_keys = extract_top_level_keys($raw, 'automatic_captions');
+my @sub_keys = extract_lang_keys_jq($output, 'subtitles');
+my @auto_keys = extract_lang_keys_jq($output, 'automatic_captions');
 
 # Detect original language
 my $original_lang = $data->{language};

@@ -130,3 +130,15 @@ JOIN-REF
 - Fields like `video_id`, `ext`, `protocol`, `url`, `name` are **track properties**, not languages
 - Solution: track brace/bracket depth when parsing raw JSON to extract only top-level keys
 - Filter known non-language keys (`live_chat`) explicitly
+
+### Iteration 42: Fast JSON Key Extraction
+- Character-by-character JSON parsing hangs on large input (yt-dlp output is 100+ KB)
+- Use `JSON::PP::decode_json()` for fast parsing, then `keys %$hash` for extraction
+- Filter non-language keys: `live_chat` and keys not matching `/^[a-z]{2,3}(-[a-zA-Z0-9]+)?$/`
+- Alphabetical order is acceptable — YouTube's order is not always meaningful anyway
+
+### Iteration 42: Use jq for JSON Key Extraction
+- Perl character-by-character parsing hangs on large input
+- `JSON::PP` loses key order (hashes are unordered)
+- Solution: use `jq` with `keys_unsorted` to preserve YouTube's language priority order
+- Filter with `select(. != "live_chat" and test("^[a-z]{2,3}(-[a-zA-Z0-9]+)?$"))`
