@@ -117,3 +117,9 @@ JOIN-REF
 - Do not use `--indent` flags or `PUBTG_INDENT` env vars to format child process stderr
 - Each tool formats its own output with its own prefix (e.g., `yt2tg-subs:`)
 - Orchestrator formats its own messages; child stderr passes through unchanged
+
+### Iteration 41: Preserve YouTube Language Order
+- `sort keys %$hash` destroys YouTube's priority order for subtitle languages
+- JSON already provides keys in priority order — preserve insertion order
+- `live_chat` and similar non-language keys appear in `automatic_captions` — must be filtered
+- yt-dlp can exit 0 without creating a file ("no subtitles available") — must check file existence

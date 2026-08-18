@@ -62,13 +62,16 @@ if (defined $custom_lang && length $custom_lang) {
             close $mfh;
             my $meta = eval { JSON::PP->new->utf8->decode($json) };
             if (!$@ && ref($meta) eq 'HASH') {
+                # 1. Original video language (highest priority)
                 if (defined $meta->{language} && length $meta->{language}) {
                     push @priority_langs, $meta->{language};
                     push @priority_langs, $meta->{language} . '-orig';
                 }
+                # 2. Manual subtitle languages (in YouTube order)
                 if (ref($meta->{subtitles}) eq 'ARRAY') {
                     push @priority_langs, @{$meta->{subtitles}};
                 }
+                # 3. Auto-caption languages (in YouTube order, first 5)
                 if (ref($meta->{automatic_captions}) eq 'ARRAY') {
                     my @auto = @{$meta->{automatic_captions}};
                     push @priority_langs, splice(@auto, 0, 5);
@@ -77,9 +80,11 @@ if (defined $custom_lang && length $custom_lang) {
         }
     }
 
+    # Deduplicate preserving order
     my %seen;
     @priority_langs = grep { !$seen{$_}++ } @priority_langs;
 
+    # Fallback list (always appended)
     my @fallback = ('en', 'en.*', 'ru', 'ru.*', 'uk', 'uk.*', 'all');
     @langs = (@priority_langs, @fallback);
     %seen = ();
@@ -92,6 +97,12 @@ my $srt_file;
 
 for my $lang (@langs) {
     d("Trying language: $lang");
+
+    # Clean up any previous SRT files in output_dir
+    for my $old (glob("$output_dir/*.srt")) {
+        unlink $old;
+    }
+
     my $cmd = "yt-dlp --write-auto-subs --write-subs --sub-langs '$lang' --convert-subs srt --skip-download -o '$output_dir/%(id)s.%(ext)s' " . quotemeta($url);
 
     my $output = `$cmd 2>&1`;
@@ -100,14 +111,18 @@ for my $lang (@langs) {
     if ($status != 0) {
         d("yt-dlp failed with status $status");
         d("stderr/stdout: $output") if $output =~ /\S/;
+        next;
     }
 
-    if ($status == 0) {
-        my @files = glob("$output_dir/*.srt");
-        if (@files) {
-            $srt_file = $files[0];
-            last;
-        }
+    # yt-dlp exited 0 — check if SRT file was actually created
+    my @files = glob("$output_dir/*.srt");
+    if (@files) {
+        $srt_file = $files[0];
+        d("Success: $srt_file");
+        last;
+    } else {
+        # yt-dlp said OK but no file — "no subtitles available" for this lang
+        d("yt-dlp returned 0 but no .srt file created, trying next");
     }
 }
 

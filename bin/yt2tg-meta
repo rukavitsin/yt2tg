@@ -58,11 +58,29 @@ my $webpage_url = "http://youtu.be/$id";
 my $title_fn = Yt2tg::Metadata::clean_filename_part($title);
 my $channel_fn = Yt2tg::Metadata::clean_filename_part($channel);
 
-# Extract available subtitle languages
+# Extract subtitle language keys - preserve YouTube order (don't sort!)
+my %non_lang = map { $_ => 1 } qw(live_chat);
 my $subs = $data->{subtitles};
 my $auto_caps = $data->{automatic_captions};
-my @sub_keys = ref($subs) eq 'HASH' ? sort keys %$subs : ();
-my @auto_keys = ref($auto_caps) eq 'HASH' ? sort keys %$auto_caps : ();
+
+my @sub_keys;
+if (ref($subs) eq 'HASH') {
+    # Preserve insertion order from JSON
+    my $json_text = JSON::PP->new->encode($subs);
+    while ($json_text =~ /"([^"]+)"\s*:/g) {
+        my $k = $1;
+        push @sub_keys, $k unless $non_lang{$k} || grep { $_ eq $k } @sub_keys;
+    }
+}
+
+my @auto_keys;
+if (ref($auto_caps) eq 'HASH') {
+    my $json_text = JSON::PP->new->encode($auto_caps);
+    while ($json_text =~ /"([^"]+)"\s*:/g) {
+        my $k = $1;
+        push @auto_keys, $k unless $non_lang{$k} || grep { $_ eq $k } @auto_keys;
+    }
+}
 
 # Detect original language from automatic_captions (look for xx-orig pattern)
 my $original_lang = $data->{language};
