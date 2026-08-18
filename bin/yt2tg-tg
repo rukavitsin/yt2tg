@@ -6,6 +6,8 @@ use utf8;
 use FindBin qw($Bin);
 use lib "$Bin/lib";
 use Encode qw(decode encode FB_CROAK);
+use File::Temp qw(tempfile);
+use HTTP::Tiny ();
 use JSON::PP ();
 use Tgph::CLI;
 use Tgph::ExitCodes;
@@ -23,28 +25,30 @@ sub read_bytes_file {
 }
 
 my @argv = @ARGV;
-my ($meta_file, $section1_file, $telegraph_url);
+my ($meta_file, $section1_file, $telegraph_url, $thumbnail_path);
 my ($options, $exit) = Tgph::CLI::parse(
     \@argv,
     spec => [
         'meta|m=s'          => \$meta_file,
         'section1|s=s'      => \$section1_file,
         'telegraph-url|u=s' => \$telegraph_url,
+        'thumbnail|t=s'     => \$thumbnail_path,
     ],
 );
 exit $exit unless $exit == Tgph::ExitCodes::OK;
 
 if ($options->{help}) {
     print <<'HELP';
-Usage: yt2tg-tg --meta FILE --section1 FILE --telegraph-url URL
-Publishes section 1 and Telegraph link to Telegram.
+Usage: yt2tg-tg --meta FILE --section1 FILE --telegraph-url URL [--thumbnail FILE]
+Publishes section 1 and Telegraph link to Telegram as a photo with caption.
 Options:
 -h, --help               Show this help
 -V, --version            Show version
--n, --dry-run            Print prepared message without sending
+-n, --dry-run            Print prepared caption without sending
 -m, --meta FILE          Metadata JSON from yt2tg-meta (required)
 -s, --section1 FILE      Section 1 markdown file (required)
 -u, --telegraph-url URL  Telegraph page URL (required)
+-t, --thumbnail FILE     Thumbnail image file (optional; uses text message if absent)
 HELP
     exit Tgph::ExitCodes::OK;
 }
@@ -82,7 +86,7 @@ if ($@) {
     exit Tgph::ExitCodes::INPUT;
 }
 
-my $message = Yt2tg::Telegram::format_message(
+my $caption = Yt2tg::Telegram::format_caption(
     title         => $meta->{title}         // '',
     channel       => $meta->{channel}       // '',
     date          => $meta->{date}          // '',
@@ -92,8 +96,8 @@ my $message = Yt2tg::Telegram::format_message(
 );
 
 if ($options->{dry_run}) {
-    binmode STDOUT;
-    print encode('UTF-8', $message);
+    binmode STDOUT, ':encoding(UTF-8)';
+    print $caption;
     exit Tgph::ExitCodes::OK;
 }
 
@@ -111,14 +115,29 @@ if (!defined $chat_id || !length $chat_id) {
     exit Tgph::ExitCodes::USAGE;
 }
 
-my $result = eval {
-    Yt2tg::Telegram::send_message(
-        token   => $token,
-        chat_id => $chat_id,
-        text    => $message,
-        api_url => $api_url,
-    );
-};
+# Decide: sendPhoto (with thumbnail) or sendMessage (text only)
+my $result;
+if (defined $thumbnail_path && -f $thumbnail_path) {
+    $result = eval {
+        Yt2tg::Telegram::send_photo(
+            token      => $token,
+            chat_id    => $chat_id,
+            photo_path => $thumbnail_path,
+            caption    => $caption,
+            api_url    => $api_url,
+        );
+    };
+} else {
+    $result = eval {
+        Yt2tg::Telegram::send_message(
+            token   => $token,
+            chat_id => $chat_id,
+            text    => $caption,
+            api_url => $api_url,
+        );
+    };
+}
+
 if ($@) {
     warn "yt2tg-tg: $@";
     exit Tgph::ExitCodes::API;

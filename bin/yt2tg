@@ -71,7 +71,6 @@ if [ -z "$input" ]; then
     die "$EX_USAGE" 'YOUTUBE_URL_OR_ID is required'
 fi
 
-# --- Parse input: extract video_id ---
 if printf '%s' "$input" | grep -qE '^[A-Za-z0-9_-]{11}$'; then
     video_id="$input"
 else
@@ -81,26 +80,23 @@ else
     ') || die "$EX_USAGE" "invalid YouTube URL or video ID"
 fi
 
-# --- Pre-checks (user input first, then environment) ---
 [ -s "$prompt_file" ] || die "$EX_INPUT" "prompt file '$prompt_file' is empty or missing"
 command -v yt-dlp >/dev/null 2>&1 || die "$EX_USAGE" 'yt-dlp not found in PATH'
 command -v cmark >/dev/null 2>&1 || die "$EX_USAGE" 'cmark not found in PATH'
+command -v curl >/dev/null 2>&1 || die "$EX_USAGE" 'curl not found in PATH'
 [ -f "$HOME/.tgrc" ] || die "$EX_INPUT" '~/.tgrc not found'
 [ -f "$HOME/.geminirc" ] || die "$EX_INPUT" '~/.geminirc not found'
 
-# --- XDG Data directories ---
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/pubtg"
 mkdir -p "$DATA_DIR/srt" "$DATA_DIR/md"
 SRT_DIR="$DATA_DIR/srt"
 MD_DIR="$DATA_DIR/md"
 JOURNAL="$BIN_DIR/publish_log.jsonl"
 
-# Temp workspace in XDG_RUNTIME_DIR (fallback /tmp)
 RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 WORK=$(mktemp -d "$RUNTIME_DIR/yt2tg.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 
-# Set diagnostic indent for all subprocesses
 export PUBTG_INDENT=6
 
 # --- 1. Extract metadata ---
@@ -108,6 +104,7 @@ step 1 'Extracting metadata'
 meta_json=$WORK/meta.json
 "$BIN_DIR/yt2tg-meta" "$video_id" > "$meta_json"
 
+# Extract fields + thumbnail URL
 perl -MJSON::PP -e '
     binmode STDOUT, ":utf8";
     open my $fh, "<:raw", $ARGV[0] or die "cannot open: $!";
@@ -120,6 +117,7 @@ perl -MJSON::PP -e '
     print(($d->{title_fn}   // ""), "\n");
     print(($d->{title}      // ""), "\n");
     print(($d->{channel}    // ""), "\n");
+    print(($d->{thumbnail}  // ""), "\n");
 ' "$meta_json" > "$WORK/meta_fields.txt"
 
 {
@@ -129,9 +127,9 @@ perl -MJSON::PP -e '
     IFS= read -r title_fn
     IFS= read -r title
     IFS= read -r channel
+    IFS= read -r thumb_url
 } < "$WORK/meta_fields.txt"
 
-# C1: metadata fields
 if [ -z "$vid_id" ] || [ -z "$date_short" ] || \
    [ -z "$channel_fn" ] || [ -z "$title_fn" ]; then
     die "$EX_INPUT" 'failed to extract metadata fields'
@@ -139,7 +137,6 @@ fi
 
 info "ID: $vid_id"
 
-# P7: Journal check
 if [ -z "$force" ]; then
     if "$BIN_DIR/yt2tg-journal" check --journal "$JOURNAL" --video-id "$vid_id" >/dev/null 2>&1; then
         info "Already published. Use --force to republish."
@@ -148,6 +145,19 @@ if [ -z "$force" ]; then
 fi
 
 base_name="${date_short}--${vid_id}--${channel_fn}--${title_fn}"
+
+# Download thumbnail (non-fatal: skip if fails)
+thumb_file=""
+if [ -n "$thumb_url" ]; then
+    thumb_file="$WORK/thumb.jpg"
+    if curl -sSfL --max-time 30 -o "$thumb_file" "$thumb_url" 2>/dev/null; then
+        info "Thumbnail: $thumb_url"
+    else
+        info "Thumbnail download failed, will send as text message"
+        rm -f "$thumb_file"
+        thumb_file=""
+    fi
+fi
 
 # --- 2. Download subtitles ---
 step 2 'Downloading subtitles'
@@ -201,10 +211,18 @@ info "URL: $telegraph_url"
 
 # --- 7. Publish to Telegram ---
 step 7 'Publishing to Telegram'
-tg_output=$("$BIN_DIR/yt2tg-tg" \
-    --meta "$meta_json" \
-    --section1 "$WORK/section1.md" \
-    --telegraph-url "$telegraph_url")
+if [ -n "$thumb_file" ] && [ -f "$thumb_file" ]; then
+    tg_output=$("$BIN_DIR/yt2tg-tg" \
+        --meta "$meta_json" \
+        --section1 "$WORK/section1.md" \
+        --telegraph-url "$telegraph_url" \
+        --thumbnail "$thumb_file")
+else
+    tg_output=$("$BIN_DIR/yt2tg-tg" \
+        --meta "$meta_json" \
+        --section1 "$WORK/section1.md" \
+        --telegraph-url "$telegraph_url")
+fi
 case "$tg_output" in
     message_id=*) ;;
     *) die "$EX_API" 'Telegram publish did not return message_id' ;;
