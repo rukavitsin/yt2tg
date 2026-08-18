@@ -5,16 +5,24 @@ use warnings;
 use utf8;
 use POSIX qw(strftime);
 
-sub clean_text {
+# Rule set 2: for text messages/publications
+# Removes ONLY emoji (Extended_Pictographic + variation selectors + ZWJ).
+# Preserves markdown (*, _, #, ~, `), punctuation, letters, digits.
+sub strip_emoji {
     my ($text) = @_;
     return '' unless defined $text;
-    $text =~ s/[*_#~`]//g;
-    $text =~ s/[^\p{L}\p{N}\p{P}\p{Z}\s]//gu;
-    $text =~ s/\s+/ /gu;
-    $text =~ s/^\s+|\s+$//gu;
+    # Remove emoji and pictographic symbols
+    $text =~ s/\p{Extended_Pictographic}//g;
+    # Remove variation selectors (U+FE00-FE0F) and zero-width joiner (U+200D)
+    # which may be left behind after emoji removal
+    $text =~ s/[\x{FE00}-\x{FE0F}\x{200D}]//g;
+    # Collapse whitespace left by removed emoji
+    $text =~ s/\s+/ /g;
+    $text =~ s/^\s+|\s+$//g;
     return $text;
 }
 
+# Rule set 1: for filenames (unchanged)
 sub clean_filename_part {
     my ($text) = @_;
     return '' unless defined $text;
