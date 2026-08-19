@@ -47,3 +47,43 @@ sub _parse_simple_yaml {
 }
 
 1;
+
+sub extract_url {
+    my ($markdown) = @_;
+    my $result = extract($markdown);
+    my $url = $result->{metadata}{telegra_ph_url};
+    return undef unless defined $url && length $url;
+    return $url;
+}
+
+sub extract_path {
+    my ($markdown) = @_;
+    my $url = extract_url($markdown);
+    return undef unless defined $url;
+    if ($url =~ m{^https?://telegra\.ph/(.+)$}) {
+        return $1;
+    }
+    return undef;
+}
+
+sub rewrite_with_url {
+    my ($markdown, $url) = @_;
+    my $result = extract($markdown);
+    my $meta = $result->{metadata};
+    my $body = $result->{markdown};
+
+    $meta->{telegra_ph_url} = $url;
+
+    my $yaml = "---\n";
+    for my $key (sort keys %$meta) {
+        my $val = $meta->{$key};
+        if ($val =~ /[ \t\n"']/) {
+            $val =~ s/"/\\"/g;
+            $val = "\"$val\"";
+        }
+        $yaml .= "$key: $val\n";
+    }
+    $yaml .= "---\n\n$body";
+
+    return $yaml;
+}
