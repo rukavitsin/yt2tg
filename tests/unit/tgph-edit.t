@@ -24,8 +24,8 @@ sub write_file {
 
 {
     my $f = write_file('edits.json', [
-        { path => 'P-1', content => ['a'] },
-        { path => 'P-2', content => ['b'] },
+        { path => 'P-1', title => 'T', content => ['a'] },
+        { path => 'P-2', title => 'T (2)', content => ['b'] },
     ]);
     my $out = `perl -I$lib $bin --dry-run --access-token secret $f 2>&1`;
     is($? >> 8, 0, 'dry-run exits OK');
@@ -39,7 +39,7 @@ sub write_file {
 # ─── missing token without dry-run: USAGE ─────────────────────────────────
 
 {
-    my $f = write_file('edits2.json', [{ path => 'P-1', content => ['a'] }]);
+    my $f = write_file('edits2.json', [{ path => 'P-1', title => 'T', content => ['a'] }]);
     my $out = `perl -I$lib $bin $f 2>&1`;
     is($? >> 8, 1, 'missing token exits USAGE');
     like($out, qr/access token is required/, 'token error reported');
@@ -75,7 +75,7 @@ sub write_file {
 # ─── stdin input works ────────────────────────────────────────────────────
 
 {
-    my $json = JSON::PP->new->utf8->encode([{ path => 'P-9', content => ['x'] }]);
+    my $json = JSON::PP->new->utf8->encode([{ path => 'P-9', title => 'T', content => ['x'] }]);
     my $out = `echo '$json' | perl -I$lib $bin --dry-run 2>&1`;
     is($? >> 8, 0, 'stdin dry-run exits OK');
     my $reqs = JSON::PP->new->utf8->decode($out);

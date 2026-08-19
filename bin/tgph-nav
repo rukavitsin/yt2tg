@@ -5,6 +5,7 @@ use warnings;
 use utf8;
 use FindBin qw($Bin);
 use lib "$Bin/lib";
+use Encode qw(decode FB_CROAK);
 use Tgph::CLI;
 use Tgph::ExitCodes;
 use Tgph::IO;
@@ -13,16 +14,19 @@ use Tgph::Publish;
 
 sub usage {
     print <<"HELP";
-Usage: tgph-nav --results FILE PAGES_JSON
+Usage: tgph-nav --results FILE --title TEXT|--title-file FILE PAGES_JSON
 Adds bidirectional navigation links between split Telegraph pages.
 Reads pages JSON (array of page contents) and results JSON from
 tgph-publish --json (array of {path, url, ...}).
-Outputs JSON array of {path, content} ready for tgph-edit.
+Outputs JSON array of {path, title, content} ready for tgph-edit.
+Titles match createPage naming: "Title", "Title (2)", ...
 Navigation format: "<- Частина N" (top) and "Частина N ->" (bottom).
 Options:
--h, --help          Show this help
--V, --version       Show version
--r, --results FILE  Results JSON from tgph-publish --json (required)
+-h, --help           Show this help
+-V, --version        Show version
+-r, --results FILE   Results JSON from tgph-publish --json (required)
+-t, --title TEXT     Page title
+    --title-file F   Read page title from FILE
 HELP
     return Tgph::ExitCodes::OK;
 }
@@ -63,11 +67,13 @@ sub nav_node {
 }
 
 my @argv = @ARGV;
-my $results_file;
+my ($results_file, $title_arg, $title_file);
 my ($options, $exit) = Tgph::CLI::parse(
     \@argv,
     spec => [
-        'results|r=s' => \$results_file,
+        'results|r=s'  => \$results_file,
+        'title|t=s'    => \$title_arg,
+        'title-file=s' => \$title_file,
     ],
 );
 
@@ -81,6 +87,38 @@ exit $exit unless $exit == Tgph::ExitCodes::OK;
 
 if (!defined $results_file) {
     warn "tgph-nav: --results is required\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+
+my $title;
+if (defined $title_file) {
+    open my $fh, '<:raw', $title_file
+        or do {
+            warn "tgph-nav: cannot open title file '$title_file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+    my $bytes = eval { Tgph::IO::read_bytes($fh) };
+    close $fh;
+    if ($@) {
+        warn "tgph-nav: $@";
+        exit Tgph::ExitCodes::INPUT;
+    }
+    $title = eval { decode('UTF-8', $bytes, FB_CROAK) };
+    if ($@) {
+        warn "tgph-nav: title file is not valid UTF-8\n";
+        exit Tgph::ExitCodes::INPUT;
+    }
+    $title =~ s/[\r\n]+\z//;
+}
+elsif (defined $title_arg) {
+    $title = eval { decode('UTF-8', $title_arg, FB_CROAK) };
+    if ($@) {
+        warn "tgph-nav: invalid UTF-8 in --title\n";
+        exit Tgph::ExitCodes::USAGE;
+    }
+}
+else {
+    warn "tgph-nav: --title or --title-file is required\n";
     exit Tgph::ExitCodes::USAGE;
 }
 
@@ -126,20 +164,19 @@ for my $i (0 .. $n - 1) {
     my @content = @{ $pages->[$i] };
     my @new;
 
-    # Previous link at top (except first page)
     if ($i > 0) {
         push @new, nav_node($results->[$i - 1]{url}, '← Частина ' . $i);
     }
 
     push @new, @content;
 
-    # Next link at bottom (except last page)
     if ($i < $n - 1) {
         push @new, nav_node($results->[$i + 1]{url}, 'Частина ' . ($i + 2) . ' →');
     }
 
     push @edits, {
         path    => $result->{path},
+        title   => Tgph::Publish::page_title($title, $i),
         content => \@new,
     };
 }

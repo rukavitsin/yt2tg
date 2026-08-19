@@ -52,7 +52,7 @@ use Tgph::Publish;
 
 {
     my $requests = Tgph::Publish::prepare_edit_requests(
-        [{ path => 'Test-Page-08-18', content => ['a'] }],
+        [{ path => 'Test-Page-08-18', title => 'T', content => ['a'] }],
     );
     is(scalar @$requests, 1, 'one edit request created');
     is($requests->[0]{method}, 'editPage', 'method is editPage');
@@ -62,8 +62,8 @@ use Tgph::Publish;
 {
     my $requests = Tgph::Publish::prepare_edit_requests(
         [
-            { path => 'Page-1', content => ['a'] },
-            { path => 'Page-2', content => ['b'] },
+            { path => 'Page-1', title => 'T', content => ['a'] },
+            { path => 'Page-2', title => 'T (2)', content => ['b'] },
         ],
         access_token => 'secret',
     );

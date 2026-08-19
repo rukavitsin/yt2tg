@@ -88,17 +88,23 @@ sub prepare_edit_requests {
     my @requests;
 
     for my $edit (@$edits) {
-        my $path = $edit->{path};
+        my $path    = $edit->{path};
+        my $title   = $edit->{title};
         my $content = $edit->{content};
 
-        die "path is required\n" unless defined($path) && length($path);
-        die "content is required\n" unless defined($content);
+        die "path is required\n"
+            unless defined($path) && length($path);
+        die "title is required\n"
+            unless defined($title) && length($title);
+        die "content is required\n"
+            unless defined($content);
 
         my $content_bytes = Tgph::JSON::encode($content);
         my $content_chars = decode('UTF-8', $content_bytes, FB_CROAK);
 
         my %fields = (
             path    => $path,
+            title   => $title,
             content => $content_chars,
         );
 
