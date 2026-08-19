@@ -156,3 +156,8 @@ JOIN-REF
 - YouTube `fulltitle` preserves original characters with accents (é, è, ñ, etc.)
 - Always use `fulltitle` with fallback: `$data->{fulltitle} // $data->{title}` (50)
 - `strip_emoji` removes only emoji via `\p{Emoji_Presentation}`, preserving accents and punctuation (49)
+
+### Trailing whitespace discipline
+- Heredoc-generated files routinely contain trailing spaces on blank lines; `git diff --cached --check` blocks commits on them (49.3, 53.x, 55.x)
+- Systemic fix: tracked `githooks/pre-commit` + `core.hooksPath` — hook auto-strips trailing whitespace from staged text files (`grep -qI '[[:blank:]]$'` skips binaries) and re-stages them (56)
+- Manual `perl -pi -e 's/[ \t]+$//'` is a one-off patch, not a solution (56)

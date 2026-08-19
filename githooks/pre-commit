@@ -1,0 +1,16 @@
+#!/bin/sh
+# pre-commit: auto-strip trailing whitespace from staged text files.
+# Binary files are skipped (grep -I). Fixed files are re-staged so the
+# commit proceeds with clean content.
+files=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$files" ] && exit 0
+
+for f in $files; do
+    [ -f "$f" ] || continue
+    if grep -qI '[[:blank:]]$' "$f" 2>/dev/null; then
+        perl -pi -e 's/[ \t]+$//' "$f"
+        git add -- "$f"
+    fi
+done
+
+exit 0
