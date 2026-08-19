@@ -195,7 +195,7 @@ if [ -z "$no_navigation" ]; then
 
     if [ "$page_count" -gt 1 ]; then
         edits=$WORK/edits.json
-        "/tgph-nav" --results "" --title-file "" "" > "$edits"
+        "$BIN_DIR/tgph-nav" --results "$publish_results" --title-file "$title_file" "$linked" > "$edits"
 
         edit_args=""
         [ -n "$access_token" ] && edit_args="--access-token $access_token"
