@@ -85,3 +85,10 @@ Additional yt2tg-specific standards:
   code blocks instead of fenced blocks (68).
 - Before publishing, scan the block for triple backticks beyond the outer
   open/close pair.
+
+## Single-source iteration number (added Iter.69)
+
+- Every iteration block starts with ITER='<number>' as the first assignment.
+- The block header echo and the git commit message both use $ITER.
+- Writing the number in two places independently is forbidden: that is
+  how 67.1 shipped a commit labeled Iter.67 (69).
