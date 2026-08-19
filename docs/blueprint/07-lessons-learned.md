@@ -161,3 +161,31 @@ JOIN-REF
 - Heredoc-generated files routinely contain trailing spaces on blank lines; `git diff --cached --check` blocks commits on them (49.3, 53.x, 55.x)
 - Systemic fix: tracked `githooks/pre-commit` + `core.hooksPath` — hook auto-strips trailing whitespace from staged text files (`grep -qI '[[:blank:]]$'` skips binaries) and re-stages them (56)
 - Manual `perl -pi -e 's/[ \t]+$//'` is a one-off patch, not a solution (56)
+
+## Iterations 52-59: bidirectional navigation between Telegraph pages
+
+### Telegraph editPage API
+- `editPage` requires `title` parameter (same as `createPage`); omitting it causes API error (57)
+- `prepare_edit_requests` must emit `path + title + content` for each edit (57)
+- Title format must match `createPage` naming: "Title", "Title (2)", "Title (3)" (57)
+
+### Navigation implementation
+- Bidirectional links: "← Частина N" at top (except first page), "Частина N →" at bottom (except last) (53, 55)
+- Navigation transformer `tgph-nav` reads `pages.json` + `results.json` (from `tgph-publish --json`) and outputs `edits.json` ready for `tgph-edit` (53)
+- `tgph-nav` requires `--title` or `--title-file` to generate per-page titles matching createPage convention (57)
+- Single-page articles skip navigation entirely (53)
+- `pubtgph` uses two-phase flow: create → nav → edit (55)
+
+### CLI design
+- `tgph-edit` mirrors `tgph-publish` interface: reads JSON from file or stdin, `--dry-run` for inspection, `--json` for full results (54)
+- Passthrough modes (`--dry-run`, `--json`) in `pubtgph` use `exec` to avoid double-processing (55.1)
+
+### Process discipline
+- Shell variable interpolation in perl `-pi -e` requires escaping: `\$VAR` not `$VAR` (57, 58)
+- Integration tests must cover real API behavior, not just unit mocks (59)
+- End-to-end verification via `getPage?return_content=true` API confirms navigation links are actually rendered (59)
+
+### Verified behavior
+- 51KB markdown → 3 pages with working bidirectional navigation (59)
+- No self-links: page 1 has "next" only, page N has "prev" only, middle pages have both (53, 59)
+- Navigation respects `--no-navigation` flag to opt out (55)
