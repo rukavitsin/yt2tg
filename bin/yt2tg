@@ -91,7 +91,7 @@ DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/pubtg"
 mkdir -p "$DATA_DIR/srt" "$DATA_DIR/md"
 SRT_DIR="$DATA_DIR/srt"
 MD_DIR="$DATA_DIR/md"
-JOURNAL="$BIN_DIR/publish_log.jsonl"
+JOURNAL="$DATA_DIR/publish_log.jsonl"
 
 RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 WORK=$(mktemp -d "$RUNTIME_DIR/yt2tg.XXXXXX")

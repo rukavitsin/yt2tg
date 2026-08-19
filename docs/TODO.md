@@ -19,7 +19,7 @@ Deferred:
 In progress:
 - orchestrator: front matter url on telegra.ph -> edit not create
 - rate limiting: retry with exponential backoff
-- publish journal relocation to $XDG_DATA_HOME/pubtg
+- (done) publish journal relocated to /pubtg
 
 ## Not designed
 

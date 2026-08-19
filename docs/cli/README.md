@@ -175,7 +175,7 @@ Commands:
 
 Options: -h/--help, -V/--version, -j/--journal FILE, --video-id ID, -r/--record JSON.
 
-Default journal file: publish_log.jsonl next to the binary.
+Default journal file: `/pubtg/publish_log.jsonl` (default: `~/.local/share/pubtg/publish_log.jsonl`).
 
 ## yt2tg pipeline checks
 

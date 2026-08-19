@@ -48,7 +48,15 @@ if ($options->{version}) {
     exit Tgph::CLI::print_version();
 }
 
-$journal_file //= "$Bin/publish_log.jsonl";
+    my $xdg = $ENV{XDG_DATA_HOME} // "$ENV{HOME}/.local/share";
+    my $default = "$xdg/pubtg/publish_log.jsonl";
+    my $dir = $default;
+    $dir =~ s{/[^/]+\z}{};
+    if (!-d $dir) {
+        require File::Path;
+        File::Path::make_path($dir) or die "cannot create $dir: $!\n";
+    }
+    $journal_file //= $default;
 
 if ($action eq 'check') {
     if (!defined $video_id || !length $video_id) {

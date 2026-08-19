@@ -56,7 +56,7 @@ The orchestrator `yt2tg` accepts either:
 
 ## Publish Journal
 
-Location: `bin/publish_log.jsonl` (next to the orchestrator).
+Location: `/pubtg/publish_log.jsonl` (default: `~/.local/share/pubtg/publish_log.jsonl`).
 Format: JSON Lines (one JSON object per line).
 Fields: video_id, date_short, title, channel, telegraph_url, telegram_message_id, published_at, status.
 
