@@ -1,0 +1,149 @@
+#!/usr/bin/env perl
+use v5.36;
+use strict;
+use warnings;
+use utf8;
+use FindBin qw($Bin);
+use lib "$Bin/lib";
+use Tgph::CLI;
+use Tgph::ExitCodes;
+use Tgph::IO;
+use Tgph::JSON;
+use Tgph::Publish;
+
+sub usage {
+    print <<"HELP";
+Usage: tgph-nav --results FILE PAGES_JSON
+Adds bidirectional navigation links between split Telegraph pages.
+Reads pages JSON (array of page contents) and results JSON from
+tgph-publish --json (array of {path, url, ...}).
+Outputs JSON array of {path, content} ready for tgph-edit.
+Navigation format: "<- Частина N" (top) and "Частина N ->" (bottom).
+Options:
+-h, --help          Show this help
+-V, --version       Show version
+-r, --results FILE  Results JSON from tgph-publish --json (required)
+HELP
+    return Tgph::ExitCodes::OK;
+}
+
+sub read_json_file {
+    my ($file) = @_;
+    open my $fh, '<:raw', $file
+        or do {
+            warn "tgph-nav: cannot open '$file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+    my $bytes = eval { Tgph::IO::read_bytes($fh) };
+    close $fh;
+    if ($@) {
+        warn "tgph-nav: $@";
+        exit Tgph::ExitCodes::INPUT;
+    }
+    my $data = eval { Tgph::JSON::decode_bytes($bytes) };
+    if ($@) {
+        warn "tgph-nav: invalid JSON in '$file': $@\n";
+        exit Tgph::ExitCodes::INPUT;
+    }
+    return $data;
+}
+
+sub nav_node {
+    my ($url, $text) = @_;
+    return {
+        tag      => 'p',
+        children => [
+            {
+                tag      => 'a',
+                attrs    => { href => $url },
+                children => [$text],
+            },
+        ],
+    };
+}
+
+my @argv = @ARGV;
+my $results_file;
+my ($options, $exit) = Tgph::CLI::parse(
+    \@argv,
+    spec => [
+        'results|r=s' => \$results_file,
+    ],
+);
+
+if ($options->{help}) {
+    exit usage();
+}
+if ($options->{version}) {
+    exit Tgph::CLI::print_version();
+}
+exit $exit unless $exit == Tgph::ExitCodes::OK;
+
+if (!defined $results_file) {
+    warn "tgph-nav: --results is required\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+
+my $pages_file = shift @argv;
+if (!defined $pages_file) {
+    warn "tgph-nav: PAGES_JSON file is required\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+
+my $pages_raw = read_json_file($pages_file);
+my $results = read_json_file($results_file);
+
+my $pages = eval { Tgph::Publish::extract_pages($pages_raw) };
+if ($@) {
+    warn "tgph-nav: $@";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+if (ref($results) ne 'ARRAY') {
+    warn "tgph-nav: results must be an array\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+if (@$pages != @$results) {
+    warn "tgph-nav: pages count (" . scalar(@$pages)
+        . ") != results count (" . scalar(@$results) . ")\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+my $n = scalar @$pages;
+my @edits;
+
+for my $i (0 .. $n - 1) {
+    my $result = $results->[$i];
+
+    if (ref($result) ne 'HASH'
+        || !defined $result->{path}
+        || !defined $result->{url}) {
+        warn "tgph-nav: result $i has no path or url\n";
+        exit Tgph::ExitCodes::INPUT;
+    }
+
+    my @content = @{ $pages->[$i] };
+    my @new;
+
+    # Previous link at top (except first page)
+    if ($i > 0) {
+        push @new, nav_node($results->[$i - 1]{url}, '← Частина ' . $i);
+    }
+
+    push @new, @content;
+
+    # Next link at bottom (except last page)
+    if ($i < $n - 1) {
+        push @new, nav_node($results->[$i + 1]{url}, 'Частина ' . ($i + 2) . ' →');
+    }
+
+    push @edits, {
+        path    => $result->{path},
+        content => \@new,
+    };
+}
+
+binmode STDOUT, ':raw';
+print Tgph::JSON::encode(\@edits);
+exit Tgph::ExitCodes::OK;
