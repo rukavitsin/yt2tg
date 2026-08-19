@@ -64,3 +64,10 @@ All core requirements implemented and tested.
 
 The yt2tg extension adds YouTube video processing capabilities to the pubtgph foundation.
 See [YT2TG_ROADMAP.md](YT2TG_ROADMAP.md) for the complete yt2tg roadmap.
+
+## Completed after roadmap freeze
+
+### tgph-delete (Iteration 67)
+- "Delete" Telegraph pages via editPage with "(deleted)" marker content
+- Reads ~/.tgrc directly (quotes stripped); no secrets in env/argv
+- Documents Telegraph API limitation: editPage requires non-empty content

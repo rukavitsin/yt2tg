@@ -75,3 +75,13 @@ Additional yt2tg-specific standards:
 - Номер коммита **строго равен** номеру итерации (`Iter.64` для Iteration 64).
 - Секреты не в env и не в argv (не видны в `ps`/`/proc`).
 - Реальное E2E тестирование для API-изменений.
+
+## Iteration block formatting (added Iter.68)
+
+- The outer shell fence of an iteration block must never contain triple
+  backticks inside: the first inner fence closes the block early and the
+  rest renders as markdown mush (68).
+- Nested code inside heredocs (docs, examples) must use 4-space-indented
+  code blocks instead of fenced blocks (68).
+- Before publishing, scan the block for triple backticks beyond the outer
+  open/close pair.

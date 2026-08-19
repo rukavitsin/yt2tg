@@ -212,3 +212,45 @@ File naming: date--ID--channel_fn--title_fn.ext
 yt2tg-subs now downloads subtitles as SRT via yt-dlp --convert-subs srt (requires ffmpeg).
 The SRT is converted to a single-line TXT for Gemini processing.
 Both .srt and .txt files are saved to the srt/ directory.
+
+## tgph-delete
+
+"Deletes" Telegraph pages by replacing content with "(deleted)" marker.
+
+Usage:
+
+    tgph-delete [OPTIONS] URL_OR_PATH [URL_OR_PATH...]
+
+Description:
+Telegraph API has no delete endpoint and requires non-empty content,
+so this tool replaces page content with a single paragraph containing
+"(deleted)". The page URL remains valid but displays only the marker.
+
+Options:
+- `-h, --help` — show help
+- `-V, --version` — show version
+- `-n, --dry-run` — print prepared API requests instead of editing
+- `--access-token TOKEN` — token (default: TP_TOKEN from ~/.tgrc)
+- `--api-url URL` — API base URL (default: TP_URL from ~/.tgrc)
+- `--timeout SECONDS` — HTTP timeout (default: 30)
+
+Examples:
+
+    # Delete single page
+    tgph-delete https://telegra.ph/My-Page-08-19
+
+    # Delete multiple pages
+    tgph-delete Page-1 Page-2 Page-3
+
+    # Inspect prepared requests without editing
+    tgph-delete --dry-run https://telegra.ph/Test-Page
+
+Config:
+Reads ~/.tgrc for TP_TOKEN and TP_URL; matching quotes are stripped
+(shell-compatible parsing).
+
+Exit codes:
+- 0 — success
+- 1 — usage error (missing arguments or token)
+- 2 — input error
+- 5 — API error
