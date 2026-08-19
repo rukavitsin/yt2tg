@@ -189,3 +189,43 @@ JOIN-REF
 - 51KB markdown → 3 pages with working bidirectional navigation (59)
 - No self-links: page 1 has "next" only, page N has "prev" only, middle pages have both (53, 59)
 - Navigation respects `--no-navigation` flag to opt out (55)
+
+
+
+## Iterations 61-67: tgph-delete and Telegraph API limitations
+
+### Telegraph editPage requires non-empty content
+- Telegraph API has no delete endpoint; workaround is editPage with minimal content (61)
+- Empty array `content=[]` returns `CONTENT_TEXT_REQUIRED` error (66)
+- Empty paragraph `{"tag":"p","children":[]}` also returns `CONTENT_TEXT_REQUIRED` (66)
+- Minimum valid content: single paragraph with text, e.g., `[{"tag":"p","children":["(deleted)"]}]` (66, 67)
+- "Deleted" pages retain their URL but display only "(deleted)" text (67)
+
+### Config parsing must match shell source
+- ~/.tgrc values are quoted (e.g., `TP_URL="https://..."`) because the file is sourced by shell — shell strips the quotes automatically (65)
+- Custom perl parsers that don't strip quotes produce literal `"https://..."` URL; HTTP::Tiny treats `"https` as hostname → 599 Internal Exception (65)
+- Rule: any parser reading shell-style config must strip matching `"..."` and `'...'` quotes (65)
+
+### Secret handling
+- Never export tokens to env or pass via argv — visible in `ps` and `/proc` (62.1)
+- Perl reads ~/.tgrc directly; CLI `--access-token` for explicit override (62.2, 62.7)
+- Tests touching config must run with `HOME=$tempdir` — otherwise real ~/.tgrc turns unit tests into network calls (62.4, 62.7)
+
+### Patching discipline (the 62.x failure chain)
+- sed/perl -pi replacements have hostile escaping: perl replacement interpolates $vars; sed replacement expands & to the whole match; shell double quotes eat backslashes (62.2, 62.5)
+- Patching by memory fails: always `grep -n` the real line first, build the pattern from fact (62.3)
+- Inserted code referencing undeclared vars slips in without a compile gate (62.6)
+- **Rule:** no sed/perl -pi for non-trivial edits — full heredoc rewrite; sed only for trivial swaps with immediate `grep -qF` verification (62.7)
+
+### Pre-publish checklist (enforced)
+- All variables declared (`my $var`); no "Global symbol requires explicit package name" (62.6)
+- `perl -c` on every touched .pm/.t; `sh -n` on every touched shell script
+- `grep -qF` after each replacement
+- Commit number **strictly equals** iteration number (`Iter.67` for Iteration 67)
+- Secrets never in env or argv
+- Real E2E test for API changes before claiming feature done (62.7, 67)
+
+### Diagnosis before fix
+- Before each fix: `grep -n` the real line, inspect the actual structure
+- For API errors: `curl` with the same params the code uses to verify URL/token/SSL independently
+- For parsing errors: print intermediate values (input vs expected)

@@ -12,17 +12,17 @@ sub usage {
     print <<"HELP";
 Usage: tgph-delete [OPTIONS] URL_OR_PATH [URL_OR_PATH...]
 
-"Deletes" Telegraph pages by editing them to empty content.
-Telegraph API has no delete endpoint; this replaces page content
-with an empty array while keeping the title as "(deleted)".
+"Deletes" Telegraph pages by replacing content with "(deleted)" marker.
+Telegraph API has no delete endpoint and requires non-empty content,
+so this replaces page content with a single paragraph containing "(deleted)".
 Accepts full URLs (https://telegra.ph/My-Page-08-19) or bare paths.
 
 Options:
   -h, --help                Show this help
   -V, --version             Show version
   -n, --dry-run             Print prepared API requests instead of editing
-      --access-token TOKEN  Telegraph access token (or TGPH_ACCESS_TOKEN)
-      --api-url URL         API base URL (default: https://api.telegra.ph)
+      --access-token TOKEN  Telegraph access token (default: TP_TOKEN from ~/.tgrc)
+      --api-url URL         API base URL (default: TP_URL from ~/.tgrc)
       --timeout SECONDS     HTTP timeout in seconds (default: 30)
 HELP
     return Tgph::ExitCodes::OK;
@@ -36,14 +36,36 @@ sub extract_path {
     return $input;
 }
 
+sub read_tgrc {
+    my $home = $ENV{HOME} // '';
+    my $rc = "$home/.tgrc";
+    return {} unless -f $rc;
+
+    my %config;
+    open my $fh, '<', $rc or return \%config;
+    while (my $line = <$fh>) {
+        chomp $line;
+        next if $line =~ /^\s*#/;
+        next unless $line =~ /^([A-Za-z_]\w*)=(.*)$/;
+        my ($k, $v) = ($1, $2);
+        # Strip matching quotes (shell-compatible behavior)
+        if ($v =~ /^"(.*)"$/ || $v =~ /^'(.*)'$/) {
+            $v = $1;
+        }
+        $config{$k} = $v;
+    }
+    close $fh;
+    return \%config;
+}
+
 my @argv = @ARGV;
-my ($access_token, $api_url, $timeout);
+my ($cli_token, $cli_url, $timeout);
 
 my ($options, $exit) = Tgph::CLI::parse(
     \@argv,
     spec => [
-        'access-token=s' => \$access_token,
-        'api-url=s'      => \$api_url,
+        'access-token=s' => \$cli_token,
+        'api-url=s'      => \$cli_url,
         'timeout=i'      => \$timeout,
     ],
 );
@@ -58,9 +80,10 @@ exit $exit unless $exit == Tgph::ExitCodes::OK;
 
 my $dry_run = $options->{dry_run} // $options->{'dry-run'};
 
-$access_token //= $ENV{TGPH_ACCESS_TOKEN};
-$api_url      //= 'https://api.telegra.ph';
-$timeout      //= 30;
+my $tgrc = read_tgrc();
+my $access_token = $cli_token // $tgrc->{TP_TOKEN};
+my $api_url      = $cli_url   // $tgrc->{TP_URL} // 'https://api.telegra.ph';
+$timeout         //= 30;
 
 if (!@argv) {
     warn "tgph-delete: at least one URL or path is required\n";
@@ -73,7 +96,12 @@ for my $arg (@argv) {
     push @edits, {
         path    => $path,
         title   => '(deleted)',
-        content => [],
+        content => [
+            {
+                tag      => 'p',
+                children => ['(deleted)'],
+            },
+        ],
     };
 }
 
@@ -96,7 +124,7 @@ if ($dry_run) {
 }
 
 if (!defined $access_token || !length $access_token) {
-    warn "tgph-delete: access token is required (use --access-token or TGPH_ACCESS_TOKEN)\n";
+    warn "tgph-delete: access token is required (set TP_TOKEN in ~/.tgrc or use --access-token)\n";
     exit Tgph::ExitCodes::USAGE;
 }
 
