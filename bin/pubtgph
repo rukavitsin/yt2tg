@@ -26,7 +26,7 @@ usage() {
     cat <<EOF
 Usage: $PROG [OPTIONS] ARTICLE_MD
 
-Pipeline: md2content -> normalize -> optimize -> validate -> split -> link -> publish
+Pipeline: md2content -> normalize -> optimize -> validate -> split -> link -> publish -> (edit with nav)
 
 Title priority: front matter -> h1 -> --title -> file name.
 
@@ -41,6 +41,7 @@ Options:
       --api-url URL         API base URL (default: \$TP_URL from ~/.tgrc)
   -n, --dry-run             Print prepared API requests without publishing
   -j, --json                Output full API results as JSON
+      --no-navigation       Skip bidirectional navigation between pages
 EOF
     exit 0
 }
@@ -53,6 +54,7 @@ access_token=''
 api_url=''
 dry_run=''
 json_out=''
+no_navigation=''
 md_file=''
 
 while [ $# -gt 0 ]; do
@@ -67,6 +69,7 @@ while [ $# -gt 0 ]; do
         --api-url)        api_url=$2; shift 2 ;;
         -n|--dry-run)     dry_run=1; shift ;;
         -j|--json)        json_out=1; shift ;;
+        --no-navigation)  no_navigation=1; shift ;;
         -*)               die "$EX_USAGE" "unknown option: $1" ;;
         *)
             if [ -n "$md_file" ]; then
@@ -106,6 +109,7 @@ linked=$WORK/linked.json
 fm_title=$WORK/fm_title.txt
 h1_title=$WORK/h1_title.txt
 fallback_title=$WORK/fallback_title.txt
+publish_results=$WORK/publish_results.json
 
 # ─── 1. md -> content.json (+ front matter title) ───────────────────────────
 "$BIN_DIR/tgph-md2content" --title-out "$fm_title" "$md_file" > "$content"
@@ -155,14 +159,49 @@ if [ -n "$api_url" ]; then
     set -- "$@" --api-url "$api_url"
 fi
 
+# Passthrough modes: dry-run and json behave exactly as before
 if [ -n "$dry_run" ]; then
     set -- "$@" --dry-run
 fi
-
 if [ -n "$json_out" ]; then
     set -- "$@" --json
 fi
 
-set -- "$@" --title-file "$title_file" "$linked"
+if [ -n "$dry_run" ] || [ -n "$json_out" ]; then
+    set -- "$@" --title-file "$title_file" "$linked"
+    exec "$BIN_DIR/tgph-publish" "$@"
+fi
 
-exec "$BIN_DIR/tgph-publish" "$@"
+# Normal mode: publish with --json to capture paths + urls
+set -- "$@" --json --title-file "$title_file" "$linked"
+"$BIN_DIR/tgph-publish" "$@" > "$publish_results"
+
+# Print URLs to stdout (backward compatible)
+perl -MJSON::PP -e '
+    my $j = do { local $/; <STDIN> };
+    my $data = JSON::PP->new->utf8->decode($j);
+    for my $r (@$data) {
+        print "$r->{url}\n" if ref($r) eq "HASH" && defined $r->{url};
+    }
+' < "$publish_results"
+
+# ─── 5. Add navigation if multiple pages ────────────────────────────────────
+if [ -z "$no_navigation" ]; then
+    page_count=$(perl -MJSON::PP -e '
+        my $j = do { local $/; <STDIN> };
+        my $data = JSON::PP->new->utf8->decode($j);
+        print scalar @$data;
+    ' < "$publish_results")
+
+    if [ "$page_count" -gt 1 ]; then
+        edits=$WORK/edits.json
+        "$BIN_DIR/tgph-nav" --results "$publish_results" "$linked" > "$edits"
+
+        edit_args=""
+        [ -n "$access_token" ] && edit_args="--access-token $access_token"
+        [ -n "$api_url" ] && edit_args="$edit_args --api-url $api_url"
+
+        # shellcheck disable=SC2086
+        "$BIN_DIR/tgph-edit" $edit_args "$edits" >/dev/null
+    fi
+fi
