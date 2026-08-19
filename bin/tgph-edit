@@ -1,0 +1,152 @@
+#!/usr/bin/env perl
+use v5.36;
+use strict;
+use warnings;
+use FindBin qw($Bin);
+use lib "$Bin/lib";
+use Tgph::CLI;
+use Tgph::ExitCodes;
+use Tgph::IO;
+use Tgph::JSON;
+use Tgph::Publish;
+
+sub usage {
+    print <<"HELP";
+Usage: tgph-edit [OPTIONS] [FILE]
+
+Edits existing Telegraph pages via editPage API.
+Input: JSON array of {path, content} objects (output of tgph-nav).
+Options:
+  -h, --help                Show this help
+  -V, --version             Show version
+  -n, --dry-run             Print prepared API requests instead of editing
+      --access-token TOKEN  Telegraph access token (or TGPH_ACCESS_TOKEN)
+      --api-url URL         API base URL (default: https://api.telegra.ph)
+      --timeout SECONDS     HTTP timeout in seconds (default: 30)
+  -j, --json                Output full API results as JSON
+HELP
+    return Tgph::ExitCodes::OK;
+}
+
+my @argv = @ARGV;
+my ($access_token, $api_url, $timeout);
+my $json_mode;
+
+my ($options, $exit) = Tgph::CLI::parse(
+    \@argv,
+    spec => [
+        'access-token=s' => \$access_token,
+        'api-url=s'      => \$api_url,
+        'timeout=i'      => \$timeout,
+        'json|j'         => \$json_mode,
+    ],
+);
+
+if ($options->{help}) {
+    exit usage();
+}
+if ($options->{version}) {
+    exit Tgph::CLI::print_version();
+}
+exit $exit unless $exit == Tgph::ExitCodes::OK;
+
+my $dry_run = $options->{dry_run} // $options->{'dry-run'};
+
+$access_token //= $ENV{TGPH_ACCESS_TOKEN};
+$api_url      //= 'https://api.telegra.ph';
+$timeout      //= 30;
+
+my $input_file = shift @argv;
+
+my $raw;
+if (defined $input_file) {
+    open my $fh, '<:raw', $input_file
+        or do {
+            warn "tgph-edit: cannot open '$input_file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+    $raw = eval { Tgph::IO::read_bytes($fh) };
+    if ($@) {
+        warn "tgph-edit: $@";
+        close $fh;
+        exit Tgph::ExitCodes::INPUT;
+    }
+    close $fh
+        or do {
+            warn "tgph-edit: cannot close '$input_file': $!\n";
+            exit Tgph::ExitCodes::INPUT;
+        };
+}
+else {
+    binmode STDIN, ':raw';
+    $raw = eval { Tgph::IO::read_bytes(\*STDIN) };
+    if ($@) {
+        warn "tgph-edit: $@";
+        exit Tgph::ExitCodes::INPUT;
+    }
+}
+
+my $edits = eval { Tgph::JSON::decode_bytes($raw) };
+if ($@) {
+    warn "tgph-edit: invalid JSON input: $@\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+if (ref($edits) ne 'ARRAY') {
+    warn "tgph-edit: input must be a JSON array of {path, content}\n";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+my $requests = eval {
+    Tgph::Publish::prepare_edit_requests(
+        $edits,
+        access_token => $access_token,
+    );
+};
+if ($@) {
+    warn "tgph-edit: $@";
+    exit Tgph::ExitCodes::INPUT;
+}
+
+if ($dry_run) {
+    my $sanitized = Tgph::Publish::sanitize_requests($requests);
+    binmode STDOUT, ':encoding(UTF-8)';
+    print Tgph::JSON::encode($sanitized), "\n";
+    exit Tgph::ExitCodes::OK;
+}
+
+if (!defined $access_token || !length $access_token) {
+    warn "tgph-edit: access token is required (use --access-token or TGPH_ACCESS_TOKEN)\n";
+    exit Tgph::ExitCodes::USAGE;
+}
+
+my $results = eval {
+    Tgph::Publish::send_requests(
+        $requests,
+        api_url => $api_url,
+        timeout => $timeout,
+    );
+};
+if ($@) {
+    my $message = $@;
+    $message =~ s/\s+\z//;
+    warn "tgph-edit: $message";
+    exit Tgph::ExitCodes::API;
+}
+
+binmode STDOUT, ':encoding(UTF-8)';
+
+if ($json_mode) {
+    print Tgph::JSON::encode($results);
+}
+else {
+    for my $result (@$results) {
+        if (ref($result) eq 'HASH'
+            && defined $result->{url}
+            && !ref($result->{url})) {
+            print "$result->{url}\n";
+        }
+    }
+}
+
+exit Tgph::ExitCodes::OK;
