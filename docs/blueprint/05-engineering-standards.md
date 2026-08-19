@@ -50,3 +50,28 @@ Additional yt2tg-specific standards:
 - Perl modules in bin/lib/Yt2tg/
 - yt-dlp for YouTube metadata and subtitle extraction
 - ffmpeg for subtitle format conversion
+
+## File patching discipline (added Iter.64)
+
+- **Запрет на sed/perl -pi для нетривиальных правок кода и тестов.** Используется только полный rewrite через heredoc (детерминирован, не зависит от текущего состояния файла).
+- sed допустим только для односимвольных/очевидных замен с немедленной `grep -qF` верификацией сразу после.
+- Причины: perl replacement интерполирует $vars; sed replacement расширяет & до всего совпадения; shell double quotes едят backslashes.
+- Исключения: массовая замена одного идентификатора на другой (rename) с явным указанием точного паттерна.
+
+## Diagnosis before fix (added Iter.64)
+
+- Перед каждым исправлением — диагностика: `grep -n` реальную строку, понимание точной структуры.
+- Паттерн для замены строится из факта (вывода диагностики), не из памяти.
+- Для API-ошибок: curl с теми же параметрами что использует код, для проверки URL/токена/SSL.
+- Для parsing-ошибок: распечатка промежуточных данных (что пришло, что ожидалось).
+
+## Pre-publish checklist (added Iter.64)
+
+Перед публикацией итерации (commit):
+- Все переменные объявлены (`my $var`, нет `Global symbol requires explicit package name`).
+- `perl -c` на каждом изменённом .pm/.t файле.
+- `sh -n` на каждом изменённом shell-скрипте.
+- `grep -qF` после каждой замены для верификации.
+- Номер коммита **строго равен** номеру итерации (`Iter.64` для Iteration 64).
+- Секреты не в env и не в argv (не видны в `ps`/`/proc`).
+- Реальное E2E тестирование для API-изменений.

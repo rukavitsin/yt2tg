@@ -52,3 +52,9 @@ Key test areas:
 - Publish journal (check, append, JSON Lines format)
 - Orchestrator pre-checks (URL validation, prompt file, config files)
 - ID input parsing (11-char ID, URL extraction)
+
+## Test isolation (added Iter.64)
+
+- Любой тест, касающийся конфигов/токенов/внешних файлов, запускается с `HOME=$tempdir` (пустой tempdir через `File::Temp::tempdir`).
+- Реальный `~/.tgrc` пользователя не должен влиять на unit-тесты — иначе тест превращается в сетевой вызов.
+- Временные файлы всегда в `tempdir`, никогда в `/tmp` с фиксированными именами (гонки при параллельном запуске).
