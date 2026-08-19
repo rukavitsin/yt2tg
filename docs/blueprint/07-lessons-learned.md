@@ -150,3 +150,9 @@ JOIN-REF
 - Always `git add` every changed file (38: orchestrator fix landed one commit late)
 - Keep iteration numbering consistent (42.x chain)
 - Unit tests cannot catch real-world API behaviour (HTTP 429, real YouTube JSON shape, client-side rendering) — run real end-to-end checks after each pipeline change (36-46)
+
+### YouTube metadata fields
+- YouTube `title` field may contain ASCII-transliterated version for non-Latin scripts (e.g., Cyrillic → Latin)
+- YouTube `fulltitle` preserves original characters with accents (é, è, ñ, etc.)
+- Always use `fulltitle` with fallback: `$data->{fulltitle} // $data->{title}` (50)
+- `strip_emoji` removes only emoji via `\p{Emoji_Presentation}`, preserving accents and punctuation (49)
