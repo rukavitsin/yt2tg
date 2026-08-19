@@ -2,19 +2,26 @@
 
 Deferred work. Designed items link to docs/design/.
 
-## Phase 3: API utilities — DESIGNED, DEFERRED
+## Phase 3: API utilities — PARTIALLY DONE
 
 Read/write utilities over the Telegraph account/page API.
 Full design: docs/design/api-utilities.md
 
-- tgph-get (getPage)
+Done:
 - tgph-edit (editPage)
+- tgph-delete (tombstone; public API has no delete)
+
+Deferred:
+- tgph-get (getPage)
 - tgph-list (getPageList)
 - tgph-stats (getViews)
-- tgph-delete (tombstone; public API has no delete)
+
+In progress:
 - orchestrator: front matter url on telegra.ph -> edit not create
+- rate limiting: retry with exponential backoff
+- publish journal relocation to $XDG_DATA_HOME/pubtg
 
 ## Not designed
 
-- rate limiting / concurrency control for batch publishing
+- concurrency control for batch publishing
 - OS packaging (deb/rpm) beyond make install DESTDIR

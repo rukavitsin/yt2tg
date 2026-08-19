@@ -55,8 +55,8 @@ All core requirements implemented and tested.
 
 ## Known Limitations
 
-- No API for editing existing pages (editPage not implemented)
-- No API for listing/deleting pages
+- editPage implemented as tgph-edit (Iter.54); page "delete" via tombstone as tgph-delete (Iter.67)
+- No list utility yet (tgph-list designed, deferred; see docs/TODO.md)
 - No rate limiting logic (user must implement if needed)
 - cmark must be installed externally for markdown conversion
 
