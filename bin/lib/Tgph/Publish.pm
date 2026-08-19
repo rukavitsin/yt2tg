@@ -79,6 +79,42 @@ sub prepare_requests {
     return \@requests;
 }
 
+sub prepare_edit_requests {
+    my ($edits, %opts) = @_;
+
+    die "edits must be an array reference\n"
+        unless ref($edits) eq 'ARRAY';
+
+    my @requests;
+
+    for my $edit (@$edits) {
+        my $path = $edit->{path};
+        my $content = $edit->{content};
+
+        die "path is required\n" unless defined($path) && length($path);
+        die "content is required\n" unless defined($content);
+
+        my $content_bytes = Tgph::JSON::encode($content);
+        my $content_chars = decode('UTF-8', $content_bytes, FB_CROAK);
+
+        my %fields = (
+            path    => $path,
+            content => $content_chars,
+        );
+
+        if (defined $opts{access_token} && length $opts{access_token}) {
+            $fields{access_token} = $opts{access_token};
+        }
+
+        push @requests, {
+            method => 'editPage',
+            fields => \%fields,
+        };
+    }
+
+    return \@requests;
+}
+
 sub sanitize_requests {
     my ($requests) = @_;
 

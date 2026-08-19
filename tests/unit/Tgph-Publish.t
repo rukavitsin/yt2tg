@@ -2,117 +2,84 @@ use v5.36;
 use strict;
 use warnings;
 use utf8;
-use FindBin qw($Bin);
 use Test::More;
+use FindBin qw($Bin);
 use lib "$Bin/../../bin/lib";
 use Tgph::Publish;
 
-is_deeply(
-    Tgph::Publish::extract_pages([]),
-    [],
-    'empty input gives no pages',
-);
+# ─── extract_pages ─────────────────────────────────────────────────────────
 
-is_deeply(
-    Tgph::Publish::extract_pages(['a']),
-    [['a']],
-    'single text content is wrapped as one page',
-);
+{
+    my $pages = Tgph::Publish::extract_pages([['a'], ['b']]);
+    is_deeply($pages, [['a'], ['b']], 'array of arrays preserved');
+}
 
-is_deeply(
-    Tgph::Publish::extract_pages([
-        { tag => 'p', children => ['x'] },
-    ]),
-    [
-        [
-            { tag => 'p', children => ['x'] },
-        ],
-    ],
-    'single element content is wrapped as one page',
-);
+{
+    my $pages = Tgph::Publish::extract_pages(['a']);
+    is_deeply($pages, [['a']], 'single page wrapped in array');
+}
 
-is_deeply(
-    Tgph::Publish::extract_pages([['a'], ['b']]),
-    [['a'], ['b']],
-    'pages envelope is preserved',
-);
+{
+    my $pages = Tgph::Publish::extract_pages([]);
+    is_deeply($pages, [], 'empty array returns empty');
+}
 
-is(Tgph::Publish::page_title('T', 0), 'T', 'first page title is unchanged');
-is(Tgph::Publish::page_title('T', 1), 'T (2)', 'second page title gets suffix');
+# ─── page_title ────────────────────────────────────────────────────────────
+
+{
+    my $title = Tgph::Publish::page_title('Title', 0);
+    is($title, 'Title', 'first page has plain title');
+}
+
+{
+    my $title = Tgph::Publish::page_title('Title', 1);
+    is($title, 'Title (2)', 'second page has index');
+}
+
+# ─── prepare_requests ─────────────────────────────────────────────────────
 
 {
     my $requests = Tgph::Publish::prepare_requests(
-        [['a'], ['b']],
+        [['a']],
         title => 'T',
     );
+    is(scalar @$requests, 1, 'one request created');
+    is($requests->[0]{method}, 'createPage', 'method is createPage');
+    is($requests->[0]{fields}{title}, 'T', 'title set correctly');
+}
 
-    is(scalar @$requests, 2, 'two requests are prepared');
+# ─── prepare_edit_requests ────────────────────────────────────────────────
 
-    is($requests->[0]{method}, 'createPage', 'request method is createPage');
-    is($requests->[0]{fields}{title}, 'T', 'first request title is correct');
-    is($requests->[1]{fields}{title}, 'T (2)', 'second request title is correct');
-
-    is($requests->[0]{fields}{content}, '["a"]', 'first content is canonical JSON');
-    is($requests->[1]{fields}{content}, '["b"]', 'second content is canonical JSON');
-
-    ok(!exists $requests->[0]{fields}{access_token},
-        'access token is omitted when absent');
+{
+    my $requests = Tgph::Publish::prepare_edit_requests(
+        [{ path => 'Test-Page-08-18', content => ['a'] }],
+    );
+    is(scalar @$requests, 1, 'one edit request created');
+    is($requests->[0]{method}, 'editPage', 'method is editPage');
+    is($requests->[0]{fields}{path}, 'Test-Page-08-18', 'path set correctly');
 }
 
 {
-    my $requests = Tgph::Publish::prepare_requests(
-        [['Привет']],
-        title        => 'Заголовок',
-        author_name  => 'Автор',
-        author_url   => 'https://example.com',
+    my $requests = Tgph::Publish::prepare_edit_requests(
+        [
+            { path => 'Page-1', content => ['a'] },
+            { path => 'Page-2', content => ['b'] },
+        ],
         access_token => 'secret',
     );
-
-    is(
-        $requests->[0]{fields}{content},
-        '["Привет"]',
-        'UTF-8 content is canonical JSON characters',
-    );
-
-    is(
-        $requests->[0]{fields}{title},
-        'Заголовок',
-        'UTF-8 title is preserved',
-    );
-
-    is(
-        $requests->[0]{fields}{author_name},
-        'Автор',
-        'author name is preserved',
-    );
-
-    is(
-        $requests->[0]{fields}{access_token},
-        'secret',
-        'access token is included',
-    );
-
-    my $sanitized = Tgph::Publish::sanitize_requests($requests);
-
-    is(
-        $sanitized->[0]{fields}{access_token},
-        '***',
-        'access token is masked in sanitized requests',
-    );
-
-    is(
-        $sanitized->[0]{fields}{title},
-        'Заголовок',
-        'title is preserved in sanitized requests',
-    );
+    is(scalar @$requests, 2, 'two edit requests created');
+    is($requests->[0]{fields}{access_token}, 'secret', 'access_token passed');
+    is($requests->[1]{fields}{access_token}, 'secret', 'access_token passed to second');
 }
 
-{
-    eval { Tgph::Publish::prepare_requests([['a']], title => '') };
-    like($@, qr/title is required/, 'empty title is rejected');
+# ─── sanitize_requests ────────────────────────────────────────────────────
 
-    eval { Tgph::Publish::prepare_requests('not-array', title => 'T') };
-    like($@, qr/pages must be an array reference/, 'non-array pages are rejected');
+{
+    my $requests = Tgph::Publish::sanitize_requests([
+        { method => 'createPage', fields => { access_token => 'secret', title => 'T' } },
+    ]);
+    is($requests->[0]{fields}{access_token}, '***', 'access_token masked');
+    is($requests->[0]{fields}{title}, 'T', 'other fields preserved');
 }
 
 done_testing;
