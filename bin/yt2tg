@@ -146,6 +146,9 @@ fi
 
 base_name="${date_short}--${vid_id}--${channel_fn}--${title_fn}"
 
+# Truncate to 200 chars to avoid "File name too long" (ext4 limit: 255)
+base_name=$(printf '%.200s' "$base_name")
+
 # Download thumbnail (non-fatal: skip if fails)
 thumb_file=""
 if [ -n "$thumb_url" ]; then
