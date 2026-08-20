@@ -3,7 +3,7 @@ use v5.36;
 use strict;
 use warnings;
 use Encode qw(decode FB_CROAK);
-use HTTP::Tiny ();
+use Tgph::HTTP ();
 use Tgph::JSON;
 
 sub extract_pages {
@@ -147,8 +147,10 @@ sub send_requests {
     my $api_url = $opts{api_url} // 'https://api.telegra.ph';
     my $timeout = $opts{timeout} // 30;
 
-    my $http = HTTP::Tiny->new(
-        timeout => $timeout,
+    my $http = Tgph::HTTP->new(
+        timeout     => $timeout,
+        retry_count => $opts{retry_count} // 3,
+        retry_delay => $opts{retry_delay} // 1,
         agent   => 'tgph/0.0.1',
     );
 
