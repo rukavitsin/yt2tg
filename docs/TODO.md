@@ -26,3 +26,5 @@ In progress:
 
 - concurrency control for batch publishing
 - OS packaging (deb/rpm) beyond make install DESTDIR
+
+- (done) pubtgph --tool option for correct tool field in journal (Iter.103.7)

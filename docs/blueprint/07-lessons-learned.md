@@ -285,3 +285,17 @@ JOIN-REF
 - Inline perl в shell scripts легко ломается из-за quoting (96, 98.1, 100)
 - Решение: писать patcher-скрипт в отдельный файл с single-quoted heredoc (96.1, 100.3, 101.2)
 - Bash не интерполирует содержимое `<<'PERL' ... PERL`
+
+## Iteration 103: pubtgph --tool option
+
+### Python patcher вместо Perl для сложных замен
+- Perl-патчеры ломаются из-за экранирования (`\$` vs `$`, `\"` vs `"`) (103.3-103.6)
+- Python-патчеры с single-quoted heredoc (`<<'PYEOF'`) не интерполируют строки (103.7)
+- Bash не интерполирует содержимое `<<'PYEOF' ... PYEOF`
+- Python `str.replace()` работает надёжно без regex-экранирования
+
+### Передача tool через вызов orchestrator
+- pubtgph логирует как "pubtgph" по умолчанию (Iter.98.5)
+- yt2tg вызывал pubtgph, который логировал как "pubtgph" вместо "yt2tg" (Iter.102)
+- Решение: pubtgph принимает `--tool` опцию, yt2tg передаёт `--tool yt2tg` (Iter.103.7)
+- Альтернатива: environment variable `TOOL` для inline Perl (create block)
