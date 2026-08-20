@@ -58,7 +58,7 @@ $journal_file //= "$xdg/pubtg/publish_log.jsonl";
 if ($action eq 'list') {
     my $entries = Tgph::Journal::list_entries($journal_file);
     if (defined $tool_filter) {
-        $entries = [ grep { $_->{tool} // 'unknown' eq $tool_filter } @$entries ];
+        $entries = [ grep { ($_->{tool} // "unknown") eq $tool_filter } @$entries ];
     }
     for my $entry (@$entries) {
         my $ts = $entry->{timestamp} // 'UNKNOWN';
