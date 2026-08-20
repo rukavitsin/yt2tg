@@ -18,11 +18,12 @@ if (@argv && $argv[0] =~ /^(list|check|append)$/) {
     $action = shift @argv;
 }
 
-my ($journal_file, $path, $record_json);
+my ($journal_file, $path, $record_json, $tool_filter);
 my ($options, $exit) = Tgph::CLI::parse(
     \@argv,
     spec => [
         'journal|j=s'  => \$journal_file,
+        'tool=s'        => \$tool_filter,
         'path=s'       => \$path,
         'record|r=s'   => \$record_json,
     ],
@@ -43,6 +44,7 @@ Options:
 -j, --journal FILE    Journal file (default: $XDG_DATA_HOME/pubtg/publish_log.jsonl)
     --path PATH       Telegraph path (for check)
 -r, --record JSON     JSON record string (for append)
+    --tool TOOL         Filter by tool (yt2tg, pubtgph)
 HELP
     exit Tgph::ExitCodes::OK;
 }
@@ -55,12 +57,16 @@ $journal_file //= "$xdg/pubtg/publish_log.jsonl";
 
 if ($action eq 'list') {
     my $entries = Tgph::Journal::list_entries($journal_file);
+    if (defined $tool_filter) {
+        $entries = [ grep { $_->{tool} // 'unknown' eq $tool_filter } @$entries ];
+    }
     for my $entry (@$entries) {
         my $ts = $entry->{timestamp} // 'UNKNOWN';
         my $act = $entry->{action} // 'unknown';
+        my $tool = $entry->{tool} // 'unknown';
         my $url = $entry->{url} // '';
         my $title = $entry->{title} // '';
-        print "$ts $act $url";
+        print "$ts [$tool] $act $url";
         print " [$title]" if length $title;
         print "\n";
     }
