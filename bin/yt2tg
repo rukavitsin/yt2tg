@@ -250,6 +250,7 @@ journal_record=$(VIDEO_ID="$vid_id" DATE_SHORT="$date_short" TITLE="$title" CHAN
         telegram_message_id => env_utf8("MESSAGE_ID"),
         published_at => env_utf8("PUBLISHED_AT"),
         status => "success",
+        tool => "yt2tg",
     };
     binmode STDOUT, ":utf8";
     print JSON::PP->new->encode($record);
