@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use utf8;
 use JSON::PP ();
-use HTTP::Tiny ();
+use Tgph::HTTP ();
 
 sub build_request {
     my (%args) = @_;
@@ -79,7 +79,7 @@ sub send_request {
     if (defined $api_key && length $api_key) {
         $headers{'x-goog-api-key'} = $api_key;
     }
-    my $http = HTTP::Tiny->new(timeout => $args{timeout} // 120);
+    my $http = Tgph::HTTP->new(timeout => $args{timeout} // 120, retry_count => $args{retry_count} // 3, retry_delay => $args{retry_delay} // 1);
     my $response = $http->request('POST', $url, {
         headers => \%headers,
         content => $body,
