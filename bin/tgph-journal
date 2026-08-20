@@ -1,0 +1,103 @@
+#!/usr/bin/env perl
+use v5.36;
+use strict;
+use warnings;
+use utf8;
+use FindBin qw($Bin);
+use lib "$Bin/lib";
+use JSON::PP ();
+use Tgph::CLI;
+use Tgph::ExitCodes;
+use Tgph::Journal;
+use open qw(:std :encoding(UTF-8));
+
+my @argv = @ARGV;
+my $action = '';
+
+if (@argv && $argv[0] =~ /^(list|check|append)$/) {
+    $action = shift @argv;
+}
+
+my ($journal_file, $path, $record_json);
+my ($options, $exit) = Tgph::CLI::parse(
+    \@argv,
+    spec => [
+        'journal|j=s'  => \$journal_file,
+        'path=s'       => \$path,
+        'record|r=s'   => \$record_json,
+    ],
+);
+exit $exit unless $exit == Tgph::ExitCodes::OK;
+
+if ($options->{help}) {
+    print <<'HELP';
+Usage: tgph-journal <list|check|append> [OPTIONS]
+Manages the pubtgph publish journal (publish_log.jsonl).
+Commands:
+  list    List all journal entries (newest first)
+  check   Check if path exists in journal (exit 0 + URL, or 1)
+  append  Append a JSON record to the journal
+Options:
+-h, --help            Show this help
+-V, --version         Show version
+-j, --journal FILE    Journal file (default: $XDG_DATA_HOME/pubtg/publish_log.jsonl)
+    --path PATH       Telegraph path (for check)
+-r, --record JSON     JSON record string (for append)
+HELP
+    exit Tgph::ExitCodes::OK;
+}
+if ($options->{version}) {
+    exit Tgph::CLI::print_version();
+}
+
+my $xdg = $ENV{XDG_DATA_HOME} // "$ENV{HOME}/.local/share";
+$journal_file //= "$xdg/pubtg/publish_log.jsonl";
+
+if ($action eq 'list') {
+    my $entries = Tgph::Journal::list_entries($journal_file);
+    for my $entry (@$entries) {
+        my $ts = $entry->{timestamp} // 'UNKNOWN';
+        my $act = $entry->{action} // 'unknown';
+        my $url = $entry->{url} // '';
+        my $title = $entry->{title} // '';
+        print "$ts $act $url";
+        print " [$title]" if length $title;
+        print "\n";
+    }
+    exit Tgph::ExitCodes::OK;
+}
+elsif ($action eq 'check') {
+    if (!defined $path || !length $path) {
+        warn "tgph-journal: check requires --path\n";
+        exit Tgph::ExitCodes::USAGE;
+    }
+    my $rec = Tgph::Journal::find_record($journal_file, $path);
+    if ($rec) {
+        my $url = $rec->{url} // '';
+        binmode STDOUT;
+        print $url, "\n";
+        exit 0;
+    }
+    exit 1;
+}
+elsif ($action eq 'append') {
+    if (!defined $record_json || !length $record_json) {
+        warn "tgph-journal: append requires --record\n";
+        exit Tgph::ExitCodes::USAGE;
+    }
+    my $rec = eval { JSON::PP->new->utf8->decode($record_json) };
+    if ($@ || ref($rec) ne 'HASH') {
+        warn "tgph-journal: invalid JSON record\n";
+        exit Tgph::ExitCodes::INPUT;
+    }
+    eval { Tgph::Journal::append_record($journal_file, $rec) };
+    if ($@) {
+        warn "tgph-journal: $@";
+        exit Tgph::ExitCodes::OUTPUT;
+    }
+    exit Tgph::ExitCodes::OK;
+}
+else {
+    warn "tgph-journal: unknown or missing action (use 'list', 'check', or 'append')\n";
+    exit Tgph::ExitCodes::USAGE;
+}
