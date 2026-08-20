@@ -39,7 +39,7 @@ All core functionality implemented and tested (685 tests PASS).
 - Verify end-to-end flow with real Gemini/Telegram/Telegraph APIs
 - Handle edge cases (no subtitles, private videos, etc.)
 
-### Priority 2: Error Handling with Retry
+### Priority 2: Error Handling with Retry — COMPLETED (Iter.80-87)
 - Handle transient API errors (HTTP 429, timeouts) gracefully
 - Implement exponential backoff for retries
 - Add --retry-count option

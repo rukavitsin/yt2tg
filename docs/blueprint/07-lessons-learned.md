@@ -247,3 +247,21 @@ JOIN-REF
 - pubtgph calls perl inline for front matter extraction (78)
 - Dry-run/json modes delegate to tgph-edit (78)
 - Normal mode: tgph-edit silent, return existing URL (78)
+
+## Iterations 80-87: rate limiting with exponential backoff
+
+### Tgph::HTTP — единая точка retry
+- Один модуль `Tgph::HTTP` оборачивает HTTP::Tiny для всех API (81.1)
+- Интеграция в `Tgph::Publish` (82.10), `Yt2tg::Gemini` (84.1), `Yt2tg::Telegram` (87)
+- Retry на 429, 5xx, таймауты; без retry на 4xx кроме 429 (81.1)
+- Backoff: delay × 2^attempt, jitter 0-25% против thundering herd (81.1)
+
+### Обёртка над нативными методами HTTP::Tiny
+- Нельзя передавать hashref как `content` в `HTTP::Tiny->request` — ошибка "reference as lvalue in substr" (82.6)
+- Правильно: оборачивать нативный `post_form` внутри retry-цикла (82.9)
+- Form encoding остаётся как работал — не переизобретать (82.9)
+
+### Однострочные perl-замены при интеграции
+- Замена `use HTTP::Tiny ()` → `use Tgph::HTTP ()` одной строкой (82.5)
+- Экранировать `$` в replacement: `\$http`, `\$args` — иначе интерполяция ломает замену (84.1)
+- Полные heredoc-rewrite больших файлов обрезаются при передаче — использовать точечные замены (82.5)
