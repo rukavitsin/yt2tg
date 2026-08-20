@@ -299,3 +299,16 @@ JOIN-REF
 - yt2tg вызывал pubtgph, который логировал как "pubtgph" вместо "yt2tg" (Iter.102)
 - Решение: pubtgph принимает `--tool` опцию, yt2tg передаёт `--tool yt2tg` (Iter.103.7)
 - Альтернатива: environment variable `TOOL` для inline Perl (create block)
+
+## Iteration 106: File name too long
+
+### Ext4 filesystem limit: 255 bytes per filename
+- yt2tg конструирует `base_name` из `${date_short}--${vid_id}--${channel_fn}--${title_fn}` (Iter.105)
+- Длинные названия видео + каналы превышают 255 байт
+- Решение: `printf '%.200s'` truncates до 200 символов (Iter.106)
+- 200 безопасно: оставляет запас для `.txt`, `.md`, `.srt` расширений
+
+### Python patcher для shell scripts
+- Python не интерполирует строки в single-quoted heredoc (Iter.103.7)
+- `str.replace()` надёжнее regex для простых замен
+- Syntax check перед запуском: `perl -c patcher.pl` или `python3 -c "import ast; ast.parse(open('patcher.py').read())"`
