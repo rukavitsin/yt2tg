@@ -28,6 +28,8 @@ Usage: $PROG [OPTIONS] ARTICLE_MD
 
 Pipeline: md2content -> normalize -> optimize -> validate -> split -> link -> publish -> (edit with nav)
 
+If ARTICLE_MD has telegra_ph_url in front matter, edits existing page instead of creating new one.
+
 Title priority: front matter -> h1 -> --title -> file name.
 
 Options:
@@ -140,7 +142,68 @@ fi
 "$BIN_DIR/tgph-split" --max-bytes "$max_bytes" "$optimized" > "$pages"
 "$BIN_DIR/tgph-link" "$pages" > "$linked"
 
-# ─── 4. publish ─────────────────────────────────────────────────────────────
+# ─── 4. Check for existing telegra_ph_url ───────────────────────────────────
+existing_path=$(perl -I"$BIN_DIR/lib" -MTgph::FrontMatter -MTgph::IO -e '
+    my $bytes = Tgph::IO::read_bytes(\*STDIN);
+    my $path = Tgph::FrontMatter::extract_path($bytes);
+    print $path if defined $path;
+' < "$md_file")
+
+page_count=$(perl -MJSON::PP -e '
+    my $j = do { local $/; <STDIN> };
+    my $data = JSON::PP->new->utf8->decode($j);
+    print scalar @$data;
+' < "$linked")
+
+if [ -n "$existing_path" ] && [ "$page_count" -eq 1 ]; then
+    # Edit existing single page instead of creating new one
+    edit_json=$WORK/edit.json
+    title_text=$(cat "$title_file")
+
+    perl -MJSON::PP -e '
+        my ($path, $title, $linked_file, $out_file) = @ARGV;
+        open my $fh, "<:raw", $linked_file or die "cannot open $linked_file: $!";
+        my $bytes = do { local $/; <$fh> };
+        close $fh;
+        my $pages = JSON::PP->new->utf8->decode($bytes);
+        my $content = $pages->[0];
+        my $edit = [{
+            path => $path,
+            title => $title,
+            content => $content,
+        }];
+        open my $out, ">:raw", $out_file or die "cannot open $out_file: $!";
+        print $out JSON::PP->new->utf8->encode($edit);
+        close $out;
+    ' "$existing_path" "$title_text" "$linked" "$edit_json"
+
+    # Dry-run or json passthrough
+    if [ -n "$dry_run" ]; then
+        set --
+        [ -n "$access_token" ] && set -- "$@" --access-token "$access_token"
+        [ -n "$api_url" ] && set -- "$@" --api-url "$api_url"
+        exec "$BIN_DIR/tgph-edit" --dry-run "$@" "$edit_json"
+    fi
+
+    if [ -n "$json_out" ]; then
+        set --
+        [ -n "$access_token" ] && set -- "$@" --access-token "$access_token"
+        [ -n "$api_url" ] && set -- "$@" --api-url "$api_url"
+        exec "$BIN_DIR/tgph-edit" --json "$@" "$edit_json"
+    fi
+
+    # Normal mode: call tgph-edit
+    set --
+    [ -n "$access_token" ] && set -- "$@" --access-token "$access_token"
+    [ -n "$api_url" ] && set -- "$@" --api-url "$api_url"
+    "$BIN_DIR/tgph-edit" "$@" "$edit_json" >/dev/null
+
+    # Return URL (already exists in front matter)
+    printf '%s\n' "https://telegra.ph/$existing_path"
+    exit 0
+fi
+
+# ─── 5. publish (new pages) ─────────────────────────────────────────────────
 set --
 
 if [ -n "$author_name" ]; then
@@ -185,7 +248,7 @@ perl -MJSON::PP -e '
     }
 ' < "$publish_results"
 
-# ─── 5. Add navigation if multiple pages ────────────────────────────────────
+# ─── 6. Add navigation if multiple pages ────────────────────────────────────
 if [ -z "$no_navigation" ]; then
     page_count=$(perl -MJSON::PP -e '
         my $j = do { local $/; <STDIN> };
