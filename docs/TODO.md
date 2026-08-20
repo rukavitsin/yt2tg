@@ -17,7 +17,7 @@ Deferred:
 - tgph-stats (getViews)
 
 In progress:
-- orchestrator: front matter url on telegra.ph -> edit not create
+- (done) orchestrator: front matter url on telegra.ph -> edit not create (Iter.78)
 - rate limiting: retry with exponential backoff
 - (done) publish journal relocated to /pubtg
 

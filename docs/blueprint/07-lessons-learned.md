@@ -229,3 +229,21 @@ JOIN-REF
 - Before each fix: `grep -n` the real line, inspect the actual structure
 - For API errors: `curl` with the same params the code uses to verify URL/token/SSL independently
 - For parsing errors: print intermediate values (input vs expected)
+
+## Iterations 73-79: orchestrator edit-not-create
+
+### Front matter as idempotency key
+- `telegra_ph_url` in front matter signals "edit existing page, don't create new" (78)
+- `FrontMatter::extract_path` returns bare path from URL for editPage API (76)
+- `FrontMatter::rewrite_with_url` updates front matter after successful publish (76)
+- Values with spaces/tabs/newlines/quotes are auto-quoted in YAML (76.1)
+
+### Single-page vs multi-page handling
+- Edit-not-create implemented for single-page articles only (78)
+- Multi-page articles (with navigation) still use createPage flow
+- Future: `telegra_ph_paths` array for multi-page edit (designed, deferred)
+
+### Shell + perl integration
+- pubtgph calls perl inline for front matter extraction (78)
+- Dry-run/json modes delegate to tgph-edit (78)
+- Normal mode: tgph-edit silent, return existing URL (78)
