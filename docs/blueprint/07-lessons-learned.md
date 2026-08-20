@@ -265,3 +265,23 @@ JOIN-REF
 - Замена `use HTTP::Tiny ()` → `use Tgph::HTTP ()` одной строкой (82.5)
 - Экранировать `$` в replacement: `\$http`, `\$args` — иначе интерполяция ломает замену (84.1)
 - Полные heredoc-rewrite больших файлов обрезаются при передаче — использовать точечные замены (82.5)
+
+## Iterations 94-101: pubtgph journal with unified tool field
+
+### Единый журнал для yt2tg и pubtgph
+- `Tgph::Journal` модуль (JSONL append-only log) для обоих инструментов (94)
+- `tgph-journal` CLI: list/check/append команды (95)
+- `pubtgph` логирует create/edit actions с `tool => "pubtgph"` (96.2)
+- `yt2tg` логирует с `tool => "yt2tg"` (99.4)
+- `tgph-journal list --tool pubtgph` фильтрует по tool (100.8)
+
+### Perl operator precedence bug
+- Фильтр `$_->{tool} // "unknown" eq $tool_filter` парсится неправильно (101)
+- `//` имеет низкий приоритет, парсится как `$_->{tool} // ('unknown' eq $tool_filter)`
+- Исправление: скобки `($_->{tool} // "unknown") eq $tool_filter` (101.2)
+- Урок: всегда использовать скобки вокруг `//` при сравнении
+
+### Многострочные perl-замены в shell
+- Inline perl в shell scripts легко ломается из-за quoting (96, 98.1, 100)
+- Решение: писать patcher-скрипт в отдельный файл с single-quoted heredoc (96.1, 100.3, 101.2)
+- Bash не интерполирует содержимое `<<'PERL' ... PERL`
