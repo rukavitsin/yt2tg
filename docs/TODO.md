@@ -19,7 +19,8 @@ Deferred:
 In progress:
 - (done) orchestrator: front matter url on telegra.ph -> edit not create (Iter.78)
 - (done) rate limiting: retry with exponential backoff (Iter.80-87)
-- (done) publish journal relocated to /pubtg
+- (done) publish journal relocated to /pubtg (Iter.78)
+- (done) unified publish journal with tool field (Iter.94-101)
 
 ## Not designed
 

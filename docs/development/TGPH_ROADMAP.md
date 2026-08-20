@@ -58,6 +58,7 @@ All core requirements implemented and tested.
 - editPage implemented as tgph-edit (Iter.54); page "delete" via tombstone as tgph-delete (Iter.67); orchestrator uses telegra_ph_url in front matter to edit existing pages instead of creating duplicates (Iter.78)
 - No list utility yet (tgph-list designed, deferred; see docs/TODO.md)
 - Rate limiting implemented via Tgph::HTTP with exponential backoff (Iter.80-87); CLI options --retry-count and --retry-delay
+- Unified publish journal for yt2tg and pubtgph with tool field filtering (Iter.94-101); CLI: tgph-journal list/check/append --tool
 - cmark must be installed externally for markdown conversion
 
 ## yt2tg Extension
