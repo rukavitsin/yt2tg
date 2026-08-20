@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use utf8;
 use JSON::PP ();
-use HTTP::Tiny ();
+use Tgph::HTTP ();
 use Encode qw(encode decode FB_CROAK);
 
 sub escape_html {
@@ -100,7 +100,7 @@ sub send_message {
         unless defined $text && length $text;
 
     my $endpoint = $api_url . '/bot' . $token . '/sendMessage';
-    my $http = HTTP::Tiny->new(timeout => $timeout);
+    my $http = Tgph::HTTP->new(timeout => $timeout, retry_count => $args{retry_count} // 3, retry_delay => $args{retry_delay} // 1);
     my $response = $http->post_form($endpoint, {
         chat_id                   => $chat_id,
         text                      => $text,
@@ -182,7 +182,7 @@ sub send_photo {
     # close boundary
     $body .= "--$boundary--\r\n";
 
-    my $http = HTTP::Tiny->new(timeout => $timeout);
+    my $http = Tgph::HTTP->new(timeout => $timeout, retry_count => $args{retry_count} // 3, retry_delay => $args{retry_delay} // 1);
     my $endpoint = $api_url . '/bot' . $token . '/sendPhoto';
     my $response = $http->request('POST', $endpoint, {
         content => $body,
