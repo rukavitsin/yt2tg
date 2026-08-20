@@ -111,6 +111,8 @@ linked=$WORK/linked.json
 fm_title=$WORK/fm_title.txt
 h1_title=$WORK/h1_title.txt
 fallback_title=$WORK/fallback_title.txt
+JOURNAL_PATH="${XDG_DATA_HOME:-$HOME/.local/share}/pubtg/publish_log.jsonl"
+mkdir -p "$(dirname "$JOURNAL_PATH")"
 publish_results=$WORK/publish_results.json
 
 # ─── 1. md -> content.json (+ front matter title) ───────────────────────────
@@ -197,6 +199,9 @@ if [ -n "$existing_path" ] && [ "$page_count" -eq 1 ]; then
     [ -n "$access_token" ] && set -- "$@" --access-token "$access_token"
     [ -n "$api_url" ] && set -- "$@" --api-url "$api_url"
     "$BIN_DIR/tgph-edit" "$@" "$edit_json" >/dev/null
+    # Log edit to journal
+    "$BIN_DIR/tgph-journal" append --journal "$JOURNAL_PATH" --record "$(perl -MJSON::PP -e 'print JSON::PP->new->canonical->encode({action=>"edit",source_file=>$ARGV[0],title=>$ARGV[1],path=>$ARGV[2],url=>"https://telegra.ph/$ARGV[2]"})' -- "$md_file" "$title_text" "$existing_path")"
+
 
     # Return URL (already exists in front matter)
     printf '%s\n' "https://telegra.ph/$existing_path"
@@ -238,6 +243,24 @@ fi
 # Normal mode: publish with --json to capture paths + urls
 set -- "$@" --json --title-file "$title_file" "$linked"
 "$BIN_DIR/tgph-publish" "$@" > "$publish_results"
+
+# Log create to journal (each published page)
+perl -MJSON::PP -MTgph::Journal -I"$BIN_DIR/lib" -e '
+    my $j = do { local $/; <STDIN> };
+    my $data = JSON::PP->new->utf8->decode($j);
+    my $journal = $ARGV[0];
+    my $source = $ARGV[1];
+    for my $r (@$data) {
+        next unless ref($r) eq "HASH" && defined $r->{url} && defined $r->{path};
+        Tgph::Journal::append_record($journal, {
+            action      => "create",
+            source_file => $source,
+            title       => $r->{title} // "",
+            path        => $r->{path},
+            url         => $r->{url},
+        });
+    }
+' "$JOURNAL_PATH" "$md_file" < "$publish_results"
 
 # Print URLs to stdout (backward compatible)
 perl -MJSON::PP -e '
