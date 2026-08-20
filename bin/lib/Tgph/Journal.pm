@@ -9,6 +9,7 @@ sub append_record {
     my ($file, $record) = @_;
     die "record must be a hash reference\n" unless ref($record) eq 'HASH';
     $record->{timestamp} //= strftime('%Y-%m-%dT%H:%M:%SZ', gmtime);
+    $record->{tool} //= "unknown";
     open my $fh, '>>:raw', $file or die "cannot open '$file' for append: $!\n";
     print $fh JSON::PP->new->utf8->canonical->encode($record), "\n";
     close $fh or die "cannot close '$file': $!\n";
