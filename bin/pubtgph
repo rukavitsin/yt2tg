@@ -44,6 +44,7 @@ Options:
   -n, --dry-run             Print prepared API requests without publishing
   -j, --json                Output full API results as JSON
       --no-navigation       Skip bidirectional navigation between pages
+      --tool TOOL           Tool name for journal (default: pubtgph)
 EOF
     exit 0
 }
@@ -58,6 +59,7 @@ dry_run=''
 json_out=''
 no_navigation=''
 md_file=''
+tool='pubtgph'
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -72,6 +74,7 @@ while [ $# -gt 0 ]; do
         -n|--dry-run)     dry_run=1; shift ;;
         -j|--json)        json_out=1; shift ;;
         --no-navigation)  no_navigation=1; shift ;;
+        --tool)           tool=$2; shift 2 ;;
         -*)               die "$EX_USAGE" "unknown option: $1" ;;
         *)
             if [ -n "$md_file" ]; then
@@ -200,7 +203,7 @@ if [ -n "$existing_path" ] && [ "$page_count" -eq 1 ]; then
     [ -n "$api_url" ] && set -- "$@" --api-url "$api_url"
     "$BIN_DIR/tgph-edit" "$@" "$edit_json" >/dev/null
     # Log edit to journal
-    "$BIN_DIR/tgph-journal" append --journal "$JOURNAL_PATH" --record "$(perl -MJSON::PP -e 'print JSON::PP->new->canonical->encode({action=>"edit",source_file=>$ARGV[0],title=>$ARGV[1],path=>$ARGV[2],url=>"https://telegra.ph/$ARGV[2]",tool=>"pubtgph"})' -- "$md_file" "$title_text" "$existing_path")"
+    "$BIN_DIR/tgph-journal" append --journal "$JOURNAL_PATH" --record "$(perl -MJSON::PP -e 'print JSON::PP->new->canonical->encode({action=>"edit",source_file=>$ARGV[0],title=>$ARGV[1],path=>$ARGV[2],url=>"https://telegra.ph/$ARGV[2]",tool=>$ARGV[3]})' -- "$md_file" "$title_text" "$existing_path" "$tool")"
 
 
     # Return URL (already exists in front matter)
@@ -245,7 +248,7 @@ set -- "$@" --json --title-file "$title_file" "$linked"
 "$BIN_DIR/tgph-publish" "$@" > "$publish_results"
 
 # Log create to journal (each published page)
-perl -MJSON::PP -MTgph::Journal -I"$BIN_DIR/lib" -e '
+TOOL="$tool" perl -MJSON::PP -MTgph::Journal -I"$BIN_DIR/lib" -e '
     my $j = do { local $/; <STDIN> };
     my $data = JSON::PP->new->utf8->decode($j);
     my $journal = $ARGV[0];
@@ -258,7 +261,7 @@ perl -MJSON::PP -MTgph::Journal -I"$BIN_DIR/lib" -e '
             title       => $r->{title} // "",
             path        => $r->{path},
             url         => $r->{url},
-            tool        => "pubtgph",
+            tool        => $ENV{TOOL},
         });
     }
 ' "$JOURNAL_PATH" "$md_file" < "$publish_results"
