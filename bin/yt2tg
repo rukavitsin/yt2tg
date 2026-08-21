@@ -80,6 +80,9 @@ else
     ') || die "$EX_USAGE" "invalid YouTube URL or video ID"
 fi
 
+# Convert ID to URL format to avoid CLI option parsing issues (e.g., -5D_UtPJk2A)
+video_url="http://youtu.be/$video_id"
+
 [ -s "$prompt_file" ] || die "$EX_INPUT" "prompt file '$prompt_file' is empty or missing"
 command -v yt-dlp >/dev/null 2>&1 || die "$EX_USAGE" 'yt-dlp not found in PATH'
 command -v cmark >/dev/null 2>&1 || die "$EX_USAGE" 'cmark not found in PATH'
@@ -102,7 +105,7 @@ export PUBTG_INDENT=6
 # --- 1. Extract metadata ---
 step 1 'Extracting metadata'
 meta_json=$WORK/meta.json
-"$BIN_DIR/yt2tg-meta" "$video_id" > "$meta_json"
+"$BIN_DIR/yt2tg-meta" "$video_url" > "$meta_json"
 
 # Extract fields + thumbnail URL
 perl -MJSON::PP -e '
@@ -164,7 +167,7 @@ fi
 
 # --- 2. Download subtitles ---
 step 2 'Downloading subtitles'
-transcript=$("$BIN_DIR/yt2tg-subs" --output-dir "$WORK" --meta-file "$meta_json" "$vid_id")
+transcript=$("$BIN_DIR/yt2tg-subs" --output-dir "$WORK" --meta-file "$meta_json" "$video_url")
 if [ -z "$transcript" ] || [ ! -f "$transcript" ]; then
     die "$EX_INPUT" 'no subtitles found'
 fi
