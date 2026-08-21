@@ -312,3 +312,26 @@ JOIN-REF
 - Python не интерполирует строки в single-quoted heredoc (Iter.103.7)
 - `str.replace()` надёжнее regex для простых замен
 - Syntax check перед запуском: `perl -c patcher.pl` или `python3 -c "import ast; ast.parse(open('patcher.py').read())"`
+
+## Iteration 108-109: yt-dlp crashes when ID starts with -
+
+### Проблема
+- Видео ID `-5D_UtPJk2A` (начинается с `-`) вызывал crash: "unknown option: -5D_UtPJk2A"
+- yt-dlp интерпретировал ID как опцию (Iter.25)
+- yt2tg передавал `$video_id` напрямую в yt2tg-meta/yt2tg-subs
+
+### Решение
+- Конвертация ID в URL формат: `http://youtu.be/$video_id` (Iter.108, 109.1)
+- yt2tg создаёт `$video_url` и передаёт его в yt2tg-meta и yt2tg-subs
+- yt-dlp корректно обрабатывает URL вместо "голого" ID
+
+### Уроки
+- yt-dlp парсит аргументы как опции если начинаются с `-`
+- Решение: всегда передавать URL, не ID
+- Аналогичная проблема в `Tgph::CLI::parse` — требует `--` separator
+- Python regex с `\.` вызывает SyntaxWarning — использовать raw strings `r'\.'`
+
+### Minor issue: Wide character warning
+- Записи в журнале с кириллицей показывают mojibake: `ÐÐ°Ðº ÑÐ°Ð±Ð¾ÑÑ`
+- Причина: `binmode STDOUT` не установлен перед JSON::PP::encode
+- TODO: исправить в следующей итерации (не критично для работы)
