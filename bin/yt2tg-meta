@@ -32,7 +32,10 @@ if ($options->{version}) {
 exit Tgph::ExitCodes::USAGE if @argv != 1;
 my $video_id = $argv[0];
 
-my $cmd = "yt-dlp -j --no-playlist " . quotemeta($video_id);
+# Convert to URL format to avoid yt-dlp option parsing issues (e.g., -5D_UtPJk2A)
+my $yt_url = $video_id =~ m{^https?://} ? $video_id : "http://youtu.be/$video_id";
+
+my $cmd = "yt-dlp -j --no-playlist " . quotemeta($yt_url);
 my $output = `$cmd 2>/dev/null`;
 my $status = $? >> 8;
 

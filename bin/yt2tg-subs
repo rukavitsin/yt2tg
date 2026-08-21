@@ -44,6 +44,9 @@ if ($options->{version}) {
 exit Tgph::ExitCodes::USAGE if @argv != 1;
 my $url = $argv[0];
 
+# Convert ID to URL format to avoid yt-dlp option parsing issues (e.g., -5D_UtPJk2A)
+$url = "http://youtu.be/$url" unless $url =~ m{^https?://};
+
 mkdir $output_dir unless -d $output_dir;
 
 sub d { diag(@_, prefix => 'yt2tg-subs: ') }
