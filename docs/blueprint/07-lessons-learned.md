@@ -335,3 +335,17 @@ JOIN-REF
 - Записи в журнале с кириллицей показывают mojibake: `ÐÐ°Ðº ÑÐ°Ð±Ð¾ÑÑ`
 - Причина: `binmode STDOUT` не установлен перед JSON::PP::encode
 - TODO: исправить в следующей итерации (не критично для работы)
+
+## Iteration 110: yt2tg crashes with bare ID starting with -
+
+### Проблема
+- `yt2tg -5D_UtPJk2A` (без URL) вызывал "unknown option: -5D_UtPJk2A"
+- Option parsing `case -*)` перехватывал ID до проверки как video ID
+
+### Решение
+- Проверять аргумент как video ID/URL **ДО** обработки как опции
+- Regex: `^[A-Za-z0-9_-]{11}$|youtu\.be/|youtube\.com/`
+- Если совпадает — treat as positional argument, не опция
+
+### Уроки
+- Option parsing должен проверять positional args **ДО** обработки `-*`
